@@ -1,16 +1,21 @@
-# SistemaRural-PE - V4 
+# SistemaRural-PE - V5
 
-Esta versión representa una etapa intermedia reconstruida a partir del proyecto real.
+## Cambios principales
+- Se mantienen las validaciones de V3.
+- Se corrigen los duplicados mediante claves `PRIMARY KEY` en SQLite.
+- Se controlan los errores de integridad de la base de datos.
+- Se incorpora `SeguridadDatos`.
+- El DNI deja de almacenarse directamente en SQLite y se protege con PBKDF2-HMAC-SHA256.
+- Se agrega verificación del DNI sin guardar el valor original.
+- Se agrega enmascaramiento del DNI para su visualización.
 
-## Cambio principal
-Se incorpora por primera vez persistencia mediante SQLite.
+## Todavía no se incorporan
+- Interfaz gráfica.
+- Patrones Factory y Singleton.
+- Suite completa de pruebas automatizadas.
+- Reportes.
 
-## Errores intencionales de esta etapa
-- Las tablas no tienen restricciones de unicidad.
-- Se pueden insertar códigos repetidos.
-- Todavía no existe una comprobación centralizada de duplicados.
-- El manejo de errores de base de datos es básico.
-
-Estos problemas forman parte de la evolución didáctica y se corrigen en **V4.1**.
-
-> Esta es una reconstrucción técnica para mostrar una progresión del proyecto; no se presenta como una copia histórica exacta de un estado anterior.
+## Ejecución
+```bash
+python main.py
+```
