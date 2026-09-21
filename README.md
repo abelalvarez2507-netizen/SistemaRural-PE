@@ -1,5 +1,3 @@
-# SistemaRural-PE — V2
+# SistemaRural-PE — V3
 
-Segunda etapa reconstruida desde la V1. Se agregan relaciones entre entidades y operaciones básicas de búsqueda y consulta de citas y atenciones.
-
-Todavía no incluye interfaz gráfica, SQLite, seguridad, validaciones avanzadas, patrones de diseño ni pruebas automatizadas.
+Evolución sobre V2: se incorporan validaciones básicas y manejo de errores para datos obligatorios, DNI, edad, códigos y fechas. Sigue siendo una aplicación en memoria, sin interfaz gráfica, SQLite ni seguridad avanzada.
