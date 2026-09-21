@@ -1,5 +1,5 @@
-# SistemaRural-PE - V1 Inicial (reconstrucción)
+# SistemaRural-PE — V2
 
-Base inicial en memoria: clases, objetos y registro básico de pacientes y personal.
+Segunda etapa reconstruida desde la V1. Se agregan relaciones entre entidades y operaciones básicas de búsqueda y consulta de citas y atenciones.
 
-No incluye todavía interfaz gráfica, SQLite, seguridad, patrones ni pruebas automatizadas.
+Todavía no incluye interfaz gráfica, SQLite, seguridad, validaciones avanzadas, patrones de diseño ni pruebas automatizadas.
