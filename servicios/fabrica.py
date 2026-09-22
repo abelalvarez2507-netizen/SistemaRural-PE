@@ -1,17 +1,107 @@
 from modelos.paciente import Paciente
 from modelos.personal_salud import PersonalSalud
+from modelos.cita import Cita
+from modelos.atencion_medica import AtencionMedica
 
 
-class FabricaPersonas:
-    """Factory centralizada para crear los tipos de persona del sistema."""
+class FabricaEntidades:
+    """
+    Factory responsable de centralizar la creación
+    de objetos principales del sistema.
+    """
 
-    _tipos = {
-        "paciente": Paciente,
-        "personal": PersonalSalud,
-    }
+    @staticmethod
+    def crear_paciente(
+        codigo,
+        dni,
+        nombre,
+        edad
+    ):
+        return Paciente(
+            codigo,
+            dni,
+            nombre,
+            edad
+        )
 
-    def crear(self, tipo, *datos):
-        clase = self._tipos.get(tipo.lower())
-        if clase is None:
-            raise ValueError(f"Tipo de persona no reconocido: {tipo}")
-        return clase(*datos)
+    @staticmethod
+    def crear_paciente_desde_datos_protegidos(
+        codigo,
+        dni_hash,
+        dni_salt,
+        nombre,
+        edad
+    ):
+        return Paciente.desde_datos_protegidos(
+            codigo,
+            dni_hash,
+            dni_salt,
+            nombre,
+            edad
+        )
+
+    @staticmethod
+    def crear_personal(
+        codigo_profesional,
+        dni,
+        nombre,
+        edad,
+        especialidad
+    ):
+        return PersonalSalud(
+            codigo_profesional,
+            dni,
+            nombre,
+            edad,
+            especialidad
+        )
+
+    @staticmethod
+    def crear_personal_desde_datos_protegidos(
+        codigo_profesional,
+        dni_hash,
+        dni_salt,
+        nombre,
+        edad,
+        especialidad
+    ):
+        return PersonalSalud.desde_datos_protegidos(
+            codigo_profesional,
+            dni_hash,
+            dni_salt,
+            nombre,
+            edad,
+            especialidad
+        )
+
+    @staticmethod
+    def crear_cita(
+        codigo,
+        paciente,
+        profesional,
+        fecha,
+        motivo,
+        estado="Pendiente"
+    ):
+        return Cita(
+            codigo,
+            paciente,
+            profesional,
+            fecha,
+            motivo,
+            estado
+        )
+
+    @staticmethod
+    def crear_atencion(
+        codigo,
+        cita,
+        diagnostico,
+        estado="Pendiente"
+    ):
+        return AtencionMedica(
+            codigo,
+            cita,
+            diagnostico,
+            estado
+        )
