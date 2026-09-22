@@ -1,13 +1,13 @@
 class Configuracion:
-    """Intento inicial de Singleton: todavía permite crear varias instancias."""
-    instancia = None
+    """Singleton: garantiza una única instancia de configuración."""
+    _instancia = None
 
-    def __init__(self):
-        self.nombre_sistema = "SistemaRural-PE"
+    def __new__(cls):
+        if cls._instancia is None:
+            cls._instancia = super().__new__(cls)
+            cls._instancia.nombre_sistema = "SistemaRural-PE"
+        return cls._instancia
 
     @classmethod
     def obtener_instancia(cls):
-        if cls.instancia is None:
-            cls.instancia = Configuracion()
-        # Error de incorporación: crear directamente Configuracion() sigue siendo posible.
-        return cls.instancia
+        return cls()
