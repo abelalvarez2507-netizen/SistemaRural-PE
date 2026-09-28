@@ -45,7 +45,11 @@ class PantallaInterna(tk.Frame):
     """
 
     def __init__(self, master, volver_callback=None, titulo="SaluPro"):
-        super().__init__(master, bg=COLOR_FONDO)
+        super().__init__(
+            master,
+            bg=COLOR_FONDO
+        )
+
         self._root = master
         self._volver_callback = volver_callback
         self._titulo = titulo
@@ -54,6 +58,7 @@ class PantallaInterna(tk.Frame):
     def title(self, titulo=None):
         if titulo is not None:
             self._titulo = titulo
+
         return self._titulo
 
     def geometry(self, *_args, **_kwargs):
@@ -69,30 +74,45 @@ class PantallaInterna(tk.Frame):
         return self._root.register(*args, **kwargs)
 
     def cerrar_sin_volver(self):
-        self._cerrando = True
-        tk.Frame.destroy(self)
+        """Destruye la pantalla sin ejecutar el callback de regreso."""
 
-    def destroy(self):
-        if self._cerrando:
-            return
-
-        callback = self._volver_callback
         self._cerrando = True
 
         try:
             tk.Frame.destroy(self)
+        except tk.TclError:
+            pass
+
+    def destroy(self):
+        """Destruye la pantalla y regresa a la pantalla anterior."""
+
+        if self._cerrando:
+            return
+
+        callback = self._volver_callback
+
+        self._cerrando = True
+
+        try:
+            tk.Frame.destroy(self)
+        except tk.TclError:
+            pass
         finally:
             if callback is not None:
                 callback()
 
 
-
 class VentanaPrincipal:
 
-    def __init__(self, ventana, pantalla_inicio=None):
+    def __init__(
+        self,
+        ventana,
+        pantalla_inicio=None
+    ):
 
         self.ventana = ventana
         self.pantalla_inicio = pantalla_inicio
+
         self._pantalla_principal = None
         self._pantalla_actual = None
         self._callback_volver_actual = None
@@ -104,17 +124,21 @@ class VentanaPrincipal:
         self.ventana.geometry(
             "1100x760"
         )
+
         self.ventana.minsize(
             950,
             680
         )
+
         self.ventana.resizable(
             True,
             True
         )
 
         try:
-            self.ventana.state("zoomed")
+            self.ventana.state(
+                "zoomed"
+            )
         except tk.TclError:
             pass
 
@@ -127,75 +151,98 @@ class VentanaPrincipal:
             bg=COLOR_FONDO
         )
 
-        # Apariencia general de los widgets Tkinter.
+        # =====================================================
+        # APARIENCIA GENERAL DE TKINTER
+        # =====================================================
+
         self.ventana.option_add(
             "*Font",
             FUENTE_NORMAL
         )
+
         self.ventana.option_add(
             "*Background",
             COLOR_FONDO
         )
+
         self.ventana.option_add(
             "*Foreground",
             COLOR_BLANCO
         )
+
         self.ventana.option_add(
             "*Entry.Background",
             COLOR_PANEL_CLARO
         )
+
         self.ventana.option_add(
             "*Entry.Foreground",
             COLOR_BLANCO
         )
+
         self.ventana.option_add(
             "*Entry.InsertBackground",
             COLOR_BLANCO
         )
+
         self.ventana.option_add(
             "*Text.Background",
             COLOR_PANEL_CLARO
         )
+
         self.ventana.option_add(
             "*Text.Foreground",
             COLOR_BLANCO
         )
+
         self.ventana.option_add(
             "*Text.InsertBackground",
             COLOR_BLANCO
         )
+
         self.ventana.option_add(
             "*Button.Background",
             COLOR_ROJO
         )
+
         self.ventana.option_add(
             "*Button.Foreground",
             COLOR_BLANCO
         )
+
         self.ventana.option_add(
             "*Button.ActiveBackground",
             COLOR_ROJO_CLARO
         )
+
         self.ventana.option_add(
             "*Button.ActiveForeground",
             COLOR_BLANCO
         )
+
         self.ventana.option_add(
             "*OptionMenu.Background",
             COLOR_PANEL_CLARO
         )
+
         self.ventana.option_add(
             "*OptionMenu.Foreground",
             COLOR_BLANCO
         )
+
         self.ventana.option_add(
             "*OptionMenu.ActiveBackground",
             COLOR_ROJO
         )
+
         self.ventana.option_add(
             "*OptionMenu.ActiveForeground",
             COLOR_BLANCO
         )
+
+        # =====================================================
+        # SERVICIOS
+        # =====================================================
 
         self.sistema = SistemaSalud()
 
@@ -206,13 +253,97 @@ class VentanaPrincipal:
         self.crear_interfaz()
 
     # =========================================================
+    # SCROLL / TOUCHPAD
+    # =========================================================
+
+    def _configurar_scroll(
+        self,
+        canvas,
+        widgets=None
+    ):
+        """Configura scroll vertical para mouse y touchpad."""
+
+        if widgets is None:
+            widgets = []
+
+        if not isinstance(widgets, (list, tuple)):
+            widgets = [widgets]
+
+        def desplazar_scroll(event):
+            try:
+                delta = getattr(
+                    event,
+                    "delta",
+                    0
+                )
+
+                if delta:
+                    # En Windows normalmente delta es múltiplo de 120.
+                    # En algunos touchpads puede ser menor.
+                    movimiento = int(
+                        -delta / 120
+                    )
+
+                    if movimiento == 0:
+                        movimiento = (
+                            -1
+                            if delta > 0
+                            else 1
+                        )
+
+                    canvas.yview_scroll(
+                        movimiento,
+                        "units"
+                    )
+
+            except tk.TclError:
+                pass
+
+        # Canvas.
+        canvas.bind(
+            "<MouseWheel>",
+            desplazar_scroll
+        )
+
+        # Widgets principales de la pantalla.
+        for widget in widgets:
+            try:
+                widget.bind(
+                    "<MouseWheel>",
+                    desplazar_scroll
+                )
+            except tk.TclError:
+                pass
+
+        # Compatibilidad con Linux.
+        try:
+            canvas.bind(
+                "<Button-4>",
+                lambda event: canvas.yview_scroll(
+                    -1,
+                    "units"
+                )
+            )
+
+            canvas.bind(
+                "<Button-5>",
+                lambda event: canvas.yview_scroll(
+                    1,
+                    "units"
+                )
+            )
+        except tk.TclError:
+            pass
+
+    # =========================================================
     # INTERFAZ PRINCIPAL
     # =========================================================
 
     def crear_interfaz(self):
         """Construye el panel administrativo principal de SaluPro."""
 
-        # Siempre que se muestre el panel administrativo, ocupa toda la ventana.
+        # Siempre que se muestre el panel administrativo,
+        # ocupa toda la ventana.
         for widget in self.ventana.winfo_children():
             try:
                 widget.destroy()
@@ -221,13 +352,23 @@ class VentanaPrincipal:
 
         self._pantalla_principal = None
         self._pantalla_actual = None
-        self._callback_volver_actual = self.volver_panel_principal
+        self._callback_volver_actual = (
+            self.volver_panel_principal
+        )
 
         # =====================================================
         # CONTENEDOR CON SCROLL
         # =====================================================
-        contenedor = tk.Frame(self.ventana, bg=COLOR_FONDO)
-        contenedor.pack(fill="both", expand=True)
+
+        contenedor = tk.Frame(
+            self.ventana,
+            bg=COLOR_FONDO
+        )
+
+        contenedor.pack(
+            fill="both",
+            expand=True
+        )
 
         self._pantalla_principal = contenedor
         self._pantalla_actual = contenedor
@@ -238,17 +379,33 @@ class VentanaPrincipal:
             highlightthickness=0,
             bd=0
         )
+
         scrollbar = tk.Scrollbar(
             contenedor,
             orient="vertical",
             command=canvas.yview
         )
-        canvas.configure(yscrollcommand=scrollbar.set)
 
-        scrollbar.pack(side="right", fill="y")
-        canvas.pack(side="left", fill="both", expand=True)
+        canvas.configure(
+            yscrollcommand=scrollbar.set
+        )
 
-        contenido = tk.Frame(canvas, bg=COLOR_FONDO)
+        scrollbar.pack(
+            side="right",
+            fill="y"
+        )
+
+        canvas.pack(
+            side="left",
+            fill="both",
+            expand=True
+        )
+
+        contenido = tk.Frame(
+            canvas,
+            bg=COLOR_FONDO
+        )
+
         ventana_canvas = canvas.create_window(
             (0, 0),
             window=contenido,
@@ -256,55 +413,150 @@ class VentanaPrincipal:
         )
 
         def actualizar_scroll(event=None):
-            canvas.configure(scrollregion=canvas.bbox("all"))
+            try:
+                canvas.configure(
+                    scrollregion=canvas.bbox("all")
+                )
+            except tk.TclError:
+                pass
 
         def ajustar_ancho(event):
-            canvas.itemconfigure(ventana_canvas, width=event.width)
+            try:
+                canvas.itemconfigure(
+                    ventana_canvas,
+                    width=event.width
+                )
+            except tk.TclError:
+                pass
 
-        contenido.bind("<Configure>", actualizar_scroll)
-        canvas.bind("<Configure>", ajustar_ancho)
+        contenido.bind(
+            "<Configure>",
+            actualizar_scroll
+        )
 
-        def rueda_mouse(event):
-            if event.delta:
-                canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        canvas.bind(
+            "<Configure>",
+            ajustar_ancho
+        )
 
-        canvas.bind_all("<MouseWheel>", rueda_mouse)
+        # =====================================================
+        # INTERIOR
+        # =====================================================
 
-        interior = tk.Frame(contenido, bg=COLOR_FONDO)
-        interior.pack(fill="both", expand=True, padx=30, pady=22)
+        interior = tk.Frame(
+            contenido,
+            bg=COLOR_FONDO
+        )
+
+        interior.pack(
+            fill="both",
+            expand=True,
+            padx=30,
+            pady=22
+        )
 
         # =====================================================
         # DATOS DEL SISTEMA
         # =====================================================
+
         pacientes = self.sistema.obtener_pacientes()
         personal = self.sistema.obtener_personal()
         citas = self.sistema.obtener_citas()
         atenciones = self.sistema.obtener_atenciones()
 
-        pendientes = [cita for cita in citas if cita.estado == "Pendiente"]
-        reprogramar = [cita for cita in citas if cita.estado == "Reprogramar"]
-        citas_atendidas = [cita for cita in citas if cita.estado == "Atendida"]
-        finalizadas = [atencion for atencion in atenciones if atencion.estado == "Finalizada"]
-        atenciones_proceso = [atencion for atencion in atenciones if atencion.estado == "En proceso"]
+        pendientes = [
+            cita
+            for cita in citas
+            if cita.estado == "Pendiente"
+        ]
+
+        reprogramar = [
+            cita
+            for cita in citas
+            if cita.estado == "Reprogramar"
+        ]
+
+        citas_atendidas = [
+            cita
+            for cita in citas
+            if cita.estado == "Atendida"
+        ]
+
+        finalizadas = [
+            atencion
+            for atencion in atenciones
+            if atencion.estado == "Finalizada"
+        ]
+
+        atenciones_proceso = [
+            atencion
+            for atencion in atenciones
+            if atencion.estado == "En proceso"
+        ]
 
         def obtener_fecha_cita(cita):
-            for formato in ("%d/%m/%Y", "%Y-%m-%d"):
+            for formato in (
+                "%d/%m/%Y",
+                "%Y-%m-%d"
+            ):
                 try:
-                    return datetime.strptime(str(cita.fecha), formato)
-                except (ValueError, TypeError):
+                    return datetime.strptime(
+                        str(cita.fecha),
+                        formato
+                    )
+                except (
+                    ValueError,
+                    TypeError
+                ):
                     pass
+
             return datetime.max
 
-        proximas = sorted(citas, key=obtener_fecha_cita)
+        # =====================================================
+        # PRÓXIMAS CITAS
+        # =====================================================
+
+        hoy = datetime.now().replace(
+            hour=0,
+            minute=0,
+            second=0,
+            microsecond=0
+        )
+
+        proximas = [
+            cita
+            for cita in citas
+            if cita.estado != "Atendida"
+            and obtener_fecha_cita(cita) >= hoy
+        ]
+
+        proximas = sorted(
+            proximas,
+            key=obtener_fecha_cita
+        )
 
         # =====================================================
         # ENCABEZADO / NAVEGACIÓN
         # =====================================================
-        encabezado = tk.Frame(interior, bg=COLOR_FONDO)
-        encabezado.pack(fill="x", pady=(0, 10))
 
-        izquierda = tk.Frame(encabezado, bg=COLOR_FONDO)
-        izquierda.pack(side="left")
+        encabezado = tk.Frame(
+            interior,
+            bg=COLOR_FONDO
+        )
+
+        encabezado.pack(
+            fill="x",
+            pady=(0, 10)
+        )
+
+        izquierda = tk.Frame(
+            encabezado,
+            bg=COLOR_FONDO
+        )
+
+        izquierda.pack(
+            side="left"
+        )
 
         tk.Label(
             izquierda,
@@ -312,7 +564,9 @@ class VentanaPrincipal:
             font=FUENTE_LOGO,
             bg=COLOR_FONDO,
             fg=COLOR_BLANCO
-        ).pack(side="left")
+        ).pack(
+            side="left"
+        )
 
         tk.Label(
             izquierda,
@@ -320,10 +574,19 @@ class VentanaPrincipal:
             font=FUENTE_NORMAL_BOLD,
             bg=COLOR_FONDO,
             fg=COLOR_GRIS_CLARO
-        ).pack(side="left", pady=7)
+        ).pack(
+            side="left",
+            pady=7
+        )
 
-        acciones = tk.Frame(encabezado, bg=COLOR_FONDO)
-        acciones.pack(side="right")
+        acciones = tk.Frame(
+            encabezado,
+            bg=COLOR_FONDO
+        )
+
+        acciones.pack(
+            side="right"
+        )
 
         boton_inicio = tk.Button(
             acciones,
@@ -340,7 +603,11 @@ class VentanaPrincipal:
             padx=13,
             pady=8
         )
-        boton_inicio.pack(side="left", padx=(0, 8))
+
+        boton_inicio.pack(
+            side="left",
+            padx=(0, 8)
+        )
 
         boton_actualizar = tk.Button(
             acciones,
@@ -357,31 +624,70 @@ class VentanaPrincipal:
             padx=13,
             pady=8
         )
-        boton_actualizar.pack(side="left")
+
+        boton_actualizar.pack(
+            side="left"
+        )
 
         for boton, color in (
-            (boton_inicio, COLOR_PANEL_CLARO),
-            (boton_actualizar, COLOR_ROJO),
+            (
+                boton_inicio,
+                COLOR_PANEL_CLARO
+            ),
+            (
+                boton_actualizar,
+                COLOR_ROJO
+            ),
         ):
             boton.bind(
                 "<Enter>",
-                lambda evento, b=boton, c=COLOR_ROJO_CLARO: b.configure(bg=c)
-            )
-            boton.bind(
-                "<Leave>",
-                lambda evento, b=boton, c=color: b.configure(bg=c)
+                lambda evento,
+                b=boton,
+                c=COLOR_ROJO_CLARO:
+                b.configure(bg=c)
             )
 
-        tk.Frame(interior, bg=COLOR_ROJO, height=3).pack(fill="x", pady=(0, 18))
+            boton.bind(
+                "<Leave>",
+                lambda evento,
+                b=boton,
+                c=color:
+                b.configure(bg=c)
+            )
+
+        tk.Frame(
+            interior,
+            bg=COLOR_ROJO,
+            height=3
+        ).pack(
+            fill="x",
+            pady=(0, 18)
+        )
 
         # =====================================================
         # TÍTULO PRINCIPAL
         # =====================================================
-        titulo_fila = tk.Frame(interior, bg=COLOR_FONDO)
-        titulo_fila.pack(fill="x", pady=(0, 15))
 
-        titulo_info = tk.Frame(titulo_fila, bg=COLOR_FONDO)
-        titulo_info.pack(side="left", fill="x", expand=True)
+        titulo_fila = tk.Frame(
+            interior,
+            bg=COLOR_FONDO
+        )
+
+        titulo_fila.pack(
+            fill="x",
+            pady=(0, 15)
+        )
+
+        titulo_info = tk.Frame(
+            titulo_fila,
+            bg=COLOR_FONDO
+        )
+
+        titulo_info.pack(
+            side="left",
+            fill="x",
+            expand=True
+        )
 
         tk.Label(
             titulo_info,
@@ -389,26 +695,39 @@ class VentanaPrincipal:
             font=FUENTE_TITULO,
             bg=COLOR_FONDO,
             fg=COLOR_BLANCO
-        ).pack(anchor="w")
+        ).pack(
+            anchor="w"
+        )
 
         tk.Label(
             titulo_info,
-            text="Todo el centro de salud en un solo lugar: pacientes, profesionales, citas, atenciones y reportes.",
+            text=(
+                "Todo el centro de salud en un solo lugar: "
+                "pacientes, profesionales, citas, atenciones y reportes."
+            ),
             font=FUENTE_SUBTITULO,
             bg=COLOR_FONDO,
             fg=COLOR_GRIS
-        ).pack(anchor="w", pady=(4, 0))
+        ).pack(
+            anchor="w",
+            pady=(4, 0)
+        )
 
         # =====================================================
         # BÚSQUEDA GLOBAL
         # =====================================================
+
         busqueda = tk.Frame(
             interior,
             bg=COLOR_PANEL,
             highlightbackground=COLOR_PANEL_CLARO,
             highlightthickness=1
         )
-        busqueda.pack(fill="x", pady=(0, 16))
+
+        busqueda.pack(
+            fill="x",
+            pady=(0, 16)
+        )
 
         tk.Label(
             busqueda,
@@ -416,10 +735,23 @@ class VentanaPrincipal:
             font=("Arial", 22, "bold"),
             bg=COLOR_PANEL,
             fg=COLOR_ROJO
-        ).pack(side="left", padx=(16, 8), pady=12)
+        ).pack(
+            side="left",
+            padx=(16, 8),
+            pady=12
+        )
 
-        info_busqueda = tk.Frame(busqueda, bg=COLOR_PANEL)
-        info_busqueda.pack(side="left", fill="x", expand=True, pady=10)
+        info_busqueda = tk.Frame(
+            busqueda,
+            bg=COLOR_PANEL
+        )
+
+        info_busqueda.pack(
+            side="left",
+            fill="x",
+            expand=True,
+            pady=10
+        )
 
         tk.Label(
             info_busqueda,
@@ -427,15 +759,21 @@ class VentanaPrincipal:
             font=FUENTE_NORMAL_BOLD,
             bg=COLOR_PANEL,
             fg=COLOR_BLANCO
-        ).pack(anchor="w")
+        ).pack(
+            anchor="w"
+        )
 
         tk.Label(
             info_busqueda,
-            text="Busca un paciente o profesional por código o DNI.",
+            text=(
+                "Busca un paciente o profesional por código o DNI."
+            ),
             font=FUENTE_PEQUENA,
             bg=COLOR_PANEL,
             fg=COLOR_GRIS
-        ).pack(anchor="w")
+        ).pack(
+            anchor="w"
+        )
 
         entrada_global = tk.Entry(
             busqueda,
@@ -447,13 +785,23 @@ class VentanaPrincipal:
             bd=0,
             font=FUENTE_NORMAL
         )
-        entrada_global.pack(side="left", padx=8, ipady=7)
-        self.configurar_limite_busqueda(entrada_global)
+
+        entrada_global.pack(
+            side="left",
+            padx=8,
+            ipady=7
+        )
+
+        self.configurar_limite_busqueda(
+            entrada_global
+        )
 
         boton_buscar_global = tk.Button(
             busqueda,
             text="Buscar",
-            command=lambda: self.buscar_global(entrada_global.get()),
+            command=lambda: self.buscar_global(
+                entrada_global.get()
+            ),
             font=FUENTE_BOTON,
             bg=COLOR_ROJO,
             fg=COLOR_BLANCO,
@@ -465,39 +813,100 @@ class VentanaPrincipal:
             padx=16,
             pady=7
         )
-        boton_buscar_global.pack(side="right", padx=16)
+
+        boton_buscar_global.pack(
+            side="right",
+            padx=16
+        )
+
         entrada_global.bind(
             "<Return>",
-            lambda evento: self.buscar_global(entrada_global.get())
+            lambda evento:
+            self.buscar_global(
+                entrada_global.get()
+            )
         )
 
         # =====================================================
         # TARJETAS DE RESUMEN
         # =====================================================
+
         tk.Label(
             interior,
             text="RESUMEN DEL CENTRO",
             font=FUENTE_SECCION,
             bg=COLOR_FONDO,
             fg=COLOR_BLANCO
-        ).pack(anchor="w", pady=(0, 6))
+        ).pack(
+            anchor="w",
+            pady=(0, 6)
+        )
 
-        resumen = tk.Frame(interior, bg=COLOR_FONDO)
-        resumen.pack(fill="x", pady=(0, 15))
+        resumen = tk.Frame(
+            interior,
+            bg=COLOR_FONDO
+        )
+
+        resumen.pack(
+            fill="x",
+            pady=(0, 15)
+        )
 
         for columna in range(3):
-            resumen.columnconfigure(columna, weight=1, uniform="resumen")
+            resumen.columnconfigure(
+                columna,
+                weight=1,
+                uniform="resumen"
+            )
 
         datos_resumen = [
-            ("👥", "TOTAL DE PACIENTES", len(pacientes), "registrados"),
-            ("⚕", "TOTAL DE PROFESIONALES", len(personal), "registrados"),
-            ("📅", "CITAS PENDIENTES", len(pendientes), "por atender"),
-            ("🔄", "CITAS PARA REPROGRAMAR", len(reprogramar), "requieren seguimiento"),
-            ("🩺", "TOTAL DE ATENCIONES", len(atenciones), f"{len(finalizadas)} finalizadas"),
-            ("🕐", "PRÓXIMAS CITAS", len(proximas), "en la agenda"),
+            (
+                "👥",
+                "TOTAL DE PACIENTES",
+                len(pacientes),
+                "registrados"
+            ),
+            (
+                "⚕",
+                "TOTAL DE PROFESIONALES",
+                len(personal),
+                "registrados"
+            ),
+            (
+                "📅",
+                "CITAS PENDIENTES",
+                len(pendientes),
+                "por atender"
+            ),
+            (
+                "🔄",
+                "CITAS PARA REPROGRAMAR",
+                len(reprogramar),
+                "requieren seguimiento"
+            ),
+            (
+                "🩺",
+                "TOTAL DE ATENCIONES",
+                len(atenciones),
+                f"{len(finalizadas)} finalizadas"
+            ),
+            (
+                "🕐",
+                "PRÓXIMAS CITAS",
+                len(proximas),
+                "en la agenda"
+            ),
         ]
 
-        for indice, (icono, titulo, valor, detalle) in enumerate(datos_resumen):
+        for indice, (
+            icono,
+            titulo,
+            valor,
+            detalle
+        ) in enumerate(
+            datos_resumen
+        ):
+
             fila = indice // 3
             columna = indice % 3
 
@@ -507,6 +916,7 @@ class VentanaPrincipal:
                 highlightbackground=COLOR_PANEL_CLARO,
                 highlightthickness=1
             )
+
             tarjeta.grid(
                 row=fila,
                 column=columna,
@@ -515,8 +925,16 @@ class VentanaPrincipal:
                 pady=5
             )
 
-            cabecera = tk.Frame(tarjeta, bg=COLOR_PANEL)
-            cabecera.pack(fill="x", padx=14, pady=(11, 0))
+            cabecera = tk.Frame(
+                tarjeta,
+                bg=COLOR_PANEL
+            )
+
+            cabecera.pack(
+                fill="x",
+                padx=14,
+                pady=(11, 0)
+            )
 
             tk.Label(
                 cabecera,
@@ -524,7 +942,9 @@ class VentanaPrincipal:
                 font=("Arial", 19, "bold"),
                 bg=COLOR_PANEL,
                 fg=COLOR_ROJO
-            ).pack(side="left")
+            ).pack(
+                side="left"
+            )
 
             tk.Label(
                 cabecera,
@@ -534,7 +954,10 @@ class VentanaPrincipal:
                 fg=COLOR_GRIS_CLARO,
                 wraplength=210,
                 justify="left"
-            ).pack(side="left", padx=8)
+            ).pack(
+                side="left",
+                padx=8
+            )
 
             tk.Label(
                 tarjeta,
@@ -542,7 +965,11 @@ class VentanaPrincipal:
                 font=("Arial", 25, "bold"),
                 bg=COLOR_PANEL,
                 fg=COLOR_BLANCO
-            ).pack(anchor="w", padx=14, pady=(2, 0))
+            ).pack(
+                anchor="w",
+                padx=14,
+                pady=(2, 0)
+            )
 
             tk.Label(
                 tarjeta,
@@ -550,15 +977,37 @@ class VentanaPrincipal:
                 font=FUENTE_PEQUENA,
                 bg=COLOR_PANEL,
                 fg=COLOR_GRIS
-            ).pack(anchor="w", padx=14, pady=(0, 11))
+            ).pack(
+                anchor="w",
+                padx=14,
+                pady=(0, 11)
+            )
 
         # =====================================================
         # AGENDA + ESTADO GENERAL
         # =====================================================
-        centro = tk.Frame(interior, bg=COLOR_FONDO)
-        centro.pack(fill="x", pady=(0, 16))
-        centro.columnconfigure(0, weight=3, uniform="centro")
-        centro.columnconfigure(1, weight=2, uniform="centro")
+
+        centro = tk.Frame(
+            interior,
+            bg=COLOR_FONDO
+        )
+
+        centro.pack(
+            fill="x",
+            pady=(0, 16)
+        )
+
+        centro.columnconfigure(
+            0,
+            weight=3,
+            uniform="centro"
+        )
+
+        centro.columnconfigure(
+            1,
+            weight=2,
+            uniform="centro"
+        )
 
         panel_citas = tk.Frame(
             centro,
@@ -566,7 +1015,13 @@ class VentanaPrincipal:
             highlightbackground=COLOR_PANEL_CLARO,
             highlightthickness=1
         )
-        panel_citas.grid(row=0, column=0, sticky="nsew", padx=(0, 5))
+
+        panel_citas.grid(
+            row=0,
+            column=0,
+            sticky="nsew",
+            padx=(0, 5)
+        )
 
         tk.Label(
             panel_citas,
@@ -574,7 +1029,11 @@ class VentanaPrincipal:
             font=FUENTE_SECCION,
             bg=COLOR_PANEL,
             fg=COLOR_BLANCO
-        ).pack(anchor="w", padx=16, pady=(13, 2))
+        ).pack(
+            anchor="w",
+            padx=16,
+            pady=(13, 2)
+        )
 
         tk.Label(
             panel_citas,
@@ -582,15 +1041,36 @@ class VentanaPrincipal:
             font=FUENTE_PEQUENA,
             bg=COLOR_PANEL,
             fg=COLOR_GRIS
-        ).pack(anchor="w", padx=16, pady=(0, 9))
+        ).pack(
+            anchor="w",
+            padx=16,
+            pady=(0, 9)
+        )
 
-        lista_citas = tk.Frame(panel_citas, bg=COLOR_PANEL)
-        lista_citas.pack(fill="x", padx=16, pady=(0, 13))
+        lista_citas = tk.Frame(
+            panel_citas,
+            bg=COLOR_PANEL
+        )
+
+        lista_citas.pack(
+            fill="x",
+            padx=16,
+            pady=(0, 13)
+        )
 
         if proximas:
+
             for cita in proximas[:6]:
-                fila_cita = tk.Frame(lista_citas, bg=COLOR_PANEL_CLARO)
-                fila_cita.pack(fill="x", pady=2)
+
+                fila_cita = tk.Frame(
+                    lista_citas,
+                    bg=COLOR_PANEL_CLARO
+                )
+
+                fila_cita.pack(
+                    fill="x",
+                    pady=2
+                )
 
                 tk.Label(
                     fila_cita,
@@ -600,21 +1080,44 @@ class VentanaPrincipal:
                     fg=COLOR_ROJO_CLARO,
                     width=13,
                     anchor="w"
-                ).pack(side="left", padx=10, pady=7)
+                ).pack(
+                    side="left",
+                    padx=10,
+                    pady=7
+                )
 
                 nombre_paciente = getattr(
-                    getattr(cita, "paciente", None),
+                    getattr(
+                        cita,
+                        "paciente",
+                        None
+                    ),
                     "nombre",
                     "Paciente"
                 )
+
                 nombre_profesional = getattr(
-                    getattr(cita, "profesional", None),
+                    getattr(
+                        cita,
+                        "profesional",
+                        None
+                    ),
                     "nombre",
                     "Profesional"
                 )
 
-                datos = tk.Frame(fila_cita, bg=COLOR_PANEL_CLARO)
-                datos.pack(side="left", fill="x", expand=True, padx=4, pady=5)
+                datos = tk.Frame(
+                    fila_cita,
+                    bg=COLOR_PANEL_CLARO
+                )
+
+                datos.pack(
+                    side="left",
+                    fill="x",
+                    expand=True,
+                    padx=4,
+                    pady=5
+                )
 
                 tk.Label(
                     datos,
@@ -623,7 +1126,9 @@ class VentanaPrincipal:
                     bg=COLOR_PANEL_CLARO,
                     fg=COLOR_BLANCO,
                     anchor="w"
-                ).pack(anchor="w")
+                ).pack(
+                    anchor="w"
+                )
 
                 tk.Label(
                     datos,
@@ -632,7 +1137,9 @@ class VentanaPrincipal:
                     bg=COLOR_PANEL_CLARO,
                     fg=COLOR_GRIS_CLARO,
                     anchor="w"
-                ).pack(anchor="w")
+                ).pack(
+                    anchor="w"
+                )
 
                 tk.Label(
                     fila_cita,
@@ -641,15 +1148,23 @@ class VentanaPrincipal:
                     bg=COLOR_PANEL_CLARO,
                     fg=COLOR_GRIS_CLARO,
                     width=14
-                ).pack(side="right", padx=10)
+                ).pack(
+                    side="right",
+                    padx=10
+                )
+
         else:
+
             tk.Label(
                 lista_citas,
-                text="No hay citas registradas todavía.",
+                text="No hay citas futuras registradas.",
                 font=FUENTE_NORMAL,
                 bg=COLOR_PANEL,
                 fg=COLOR_GRIS
-            ).pack(anchor="w", pady=10)
+            ).pack(
+                anchor="w",
+                pady=10
+            )
 
         panel_estado = tk.Frame(
             centro,
@@ -657,7 +1172,13 @@ class VentanaPrincipal:
             highlightbackground=COLOR_PANEL_CLARO,
             highlightthickness=1
         )
-        panel_estado.grid(row=0, column=1, sticky="nsew", padx=(5, 0))
+
+        panel_estado.grid(
+            row=0,
+            column=1,
+            sticky="nsew",
+            padx=(5, 0)
+        )
 
         tk.Label(
             panel_estado,
@@ -665,22 +1186,59 @@ class VentanaPrincipal:
             font=FUENTE_SECCION,
             bg=COLOR_PANEL,
             fg=COLOR_BLANCO
-        ).pack(anchor="w", padx=16, pady=(13, 10))
+        ).pack(
+            anchor="w",
+            padx=16,
+            pady=(13, 10)
+        )
 
         estado_resumen = [
-            ("Pacientes registrados", len(pacientes)),
-            ("Profesionales registrados", len(personal)),
-            ("Citas registradas", len(citas)),
-            ("Citas pendientes", len(pendientes)),
-            ("Citas atendidas", len(citas_atendidas)),
-            ("Para reprogramar", len(reprogramar)),
-            ("Atenciones en proceso", len(atenciones_proceso)),
-            ("Atenciones finalizadas", len(finalizadas)),
+            (
+                "Pacientes registrados",
+                len(pacientes)
+            ),
+            (
+                "Profesionales registrados",
+                len(personal)
+            ),
+            (
+                "Citas registradas",
+                len(citas)
+            ),
+            (
+                "Citas pendientes",
+                len(pendientes)
+            ),
+            (
+                "Citas atendidas",
+                len(citas_atendidas)
+            ),
+            (
+                "Para reprogramar",
+                len(reprogramar)
+            ),
+            (
+                "Atenciones en proceso",
+                len(atenciones_proceso)
+            ),
+            (
+                "Atenciones finalizadas",
+                len(finalizadas)
+            ),
         ]
 
         for nombre, cantidad in estado_resumen:
-            fila_estado = tk.Frame(panel_estado, bg=COLOR_PANEL)
-            fila_estado.pack(fill="x", padx=16, pady=3)
+
+            fila_estado = tk.Frame(
+                panel_estado,
+                bg=COLOR_PANEL
+            )
+
+            fila_estado.pack(
+                fill="x",
+                padx=16,
+                pady=3
+            )
 
             tk.Label(
                 fila_estado,
@@ -688,7 +1246,9 @@ class VentanaPrincipal:
                 font=FUENTE_PEQUENA,
                 bg=COLOR_PANEL,
                 fg=COLOR_GRIS_CLARO
-            ).pack(side="left")
+            ).pack(
+                side="left"
+            )
 
             tk.Label(
                 fila_estado,
@@ -696,7 +1256,9 @@ class VentanaPrincipal:
                 font=FUENTE_NORMAL_BOLD,
                 bg=COLOR_PANEL,
                 fg=COLOR_BLANCO
-            ).pack(side="right")
+            ).pack(
+                side="right"
+            )
 
         aviso = (
             "Hay citas pendientes de atención."
@@ -712,24 +1274,43 @@ class VentanaPrincipal:
             fg=COLOR_GRIS,
             wraplength=330,
             justify="left"
-        ).pack(anchor="w", padx=16, pady=(9, 13))
+        ).pack(
+            anchor="w",
+            padx=16,
+            pady=(9, 13)
+        )
 
         # =====================================================
         # MÓDULOS PRINCIPALES
         # =====================================================
+
         tk.Label(
             interior,
             text="MÓDULOS DEL SISTEMA",
             font=FUENTE_SECCION,
             bg=COLOR_FONDO,
             fg=COLOR_BLANCO
-        ).pack(anchor="w", pady=(0, 6))
+        ).pack(
+            anchor="w",
+            pady=(0, 6)
+        )
 
-        zona = tk.Frame(interior, bg=COLOR_FONDO)
-        zona.pack(fill="x", pady=(0, 12))
+        zona = tk.Frame(
+            interior,
+            bg=COLOR_FONDO
+        )
+
+        zona.pack(
+            fill="x",
+            pady=(0, 12)
+        )
 
         for columna in range(3):
-            zona.columnconfigure(columna, weight=1, uniform="modulos")
+            zona.columnconfigure(
+                columna,
+                weight=1,
+                uniform="modulos"
+            )
 
         def crear_modulo(
             fila,
@@ -742,12 +1323,14 @@ class VentanaPrincipal:
             texto_boton,
             comando
         ):
+
             tarjeta = tk.Frame(
                 zona,
                 bg=COLOR_PANEL,
                 highlightbackground=COLOR_PANEL_CLARO,
                 highlightthickness=1
             )
+
             tarjeta.grid(
                 row=fila,
                 column=columna,
@@ -756,8 +1339,16 @@ class VentanaPrincipal:
                 pady=7
             )
 
-            superior = tk.Frame(tarjeta, bg=COLOR_PANEL)
-            superior.pack(fill="x", padx=16, pady=(15, 5))
+            superior = tk.Frame(
+                tarjeta,
+                bg=COLOR_PANEL
+            )
+
+            superior.pack(
+                fill="x",
+                padx=16,
+                pady=(15, 5)
+            )
 
             tk.Label(
                 superior,
@@ -765,7 +1356,9 @@ class VentanaPrincipal:
                 font=("Arial", 22, "bold"),
                 bg=COLOR_PANEL,
                 fg=COLOR_ROJO
-            ).pack(side="left")
+            ).pack(
+                side="left"
+            )
 
             tk.Label(
                 superior,
@@ -775,7 +1368,10 @@ class VentanaPrincipal:
                 fg=COLOR_BLANCO,
                 wraplength=235,
                 justify="left"
-            ).pack(side="left", padx=9)
+            ).pack(
+                side="left",
+                padx=9
+            )
 
             tk.Label(
                 tarjeta,
@@ -785,10 +1381,22 @@ class VentanaPrincipal:
                 fg=COLOR_GRIS,
                 wraplength=290,
                 justify="left"
-            ).pack(anchor="w", padx=16, pady=(0, 10))
+            ).pack(
+                anchor="w",
+                padx=16,
+                pady=(0, 10)
+            )
 
-            estadistica = tk.Frame(tarjeta, bg=COLOR_PANEL_CLARO)
-            estadistica.pack(fill="x", padx=16, pady=(0, 12))
+            estadistica = tk.Frame(
+                tarjeta,
+                bg=COLOR_PANEL_CLARO
+            )
+
+            estadistica.pack(
+                fill="x",
+                padx=16,
+                pady=(0, 12)
+            )
 
             tk.Label(
                 estadistica,
@@ -796,7 +1404,11 @@ class VentanaPrincipal:
                 font=("Arial", 17, "bold"),
                 bg=COLOR_PANEL_CLARO,
                 fg=COLOR_BLANCO
-            ).pack(side="left", padx=10, pady=7)
+            ).pack(
+                side="left",
+                padx=10,
+                pady=7
+            )
 
             tk.Label(
                 estadistica,
@@ -804,7 +1416,10 @@ class VentanaPrincipal:
                 font=FUENTE_PEQUENA,
                 bg=COLOR_PANEL_CLARO,
                 fg=COLOR_GRIS_CLARO
-            ).pack(side="left", padx=(0, 8))
+            ).pack(
+                side="left",
+                padx=(0, 8)
+            )
 
             boton = tk.Button(
                 tarjeta,
@@ -822,74 +1437,157 @@ class VentanaPrincipal:
                 pady=8,
                 width=22
             )
-            boton.pack(anchor="center", pady=(0, 15), ipadx=5)
+
+            boton.pack(
+                anchor="center",
+                pady=(0, 15),
+                ipadx=5
+            )
 
             boton.bind(
                 "<Enter>",
-                lambda evento, b=boton: b.configure(bg=COLOR_ROJO_CLARO)
+                lambda evento,
+                b=boton:
+                b.configure(
+                    bg=COLOR_ROJO_CLARO
+                )
             )
+
             boton.bind(
                 "<Leave>",
-                lambda evento, b=boton: b.configure(bg=COLOR_ROJO)
+                lambda evento,
+                b=boton:
+                b.configure(
+                    bg=COLOR_ROJO
+                )
             )
 
         crear_modulo(
-            0, 0, "👥", "GESTIÓN DE PACIENTES",
-            "Registre pacientes, consulte sus datos y revise su historial clínico.",
-            len(pacientes), "pacientes registrados",
-            "Gestionar pacientes", self.gestion_pacientes
+            0,
+            0,
+            "👥",
+            "GESTIÓN DE PACIENTES",
+            (
+                "Registre pacientes, consulte sus datos "
+                "y revise su historial clínico."
+            ),
+            len(pacientes),
+            "pacientes registrados",
+            "Gestionar pacientes",
+            self.gestion_pacientes
         )
 
         crear_modulo(
-            0, 1, "⚕", "GESTIÓN DE PROFESIONALES",
-            "Administre el personal de salud y consulte la actividad registrada.",
-            len(personal), "profesionales registrados",
-            "Gestionar profesionales", self.gestion_profesionales
+            0,
+            1,
+            "⚕",
+            "GESTIÓN DE PROFESIONALES",
+            (
+                "Administre el personal de salud "
+                "y consulte la actividad registrada."
+            ),
+            len(personal),
+            "profesionales registrados",
+            "Gestionar profesionales",
+            self.gestion_profesionales
         )
 
         crear_modulo(
-            0, 2, "📅", "GESTIÓN DE CITAS",
-            "Administre la agenda, los estados y las citas que requieren seguimiento.",
-            len(citas), "citas en agenda",
-            "Gestionar citas", self.gestion_citas
+            0,
+            2,
+            "📅",
+            "GESTIÓN DE CITAS",
+            (
+                "Administre la agenda, los estados "
+                "y las citas que requieren seguimiento."
+            ),
+            len(citas),
+            "citas en agenda",
+            "Gestionar citas",
+            self.gestion_citas
         )
 
         crear_modulo(
-            1, 0, "🩺", "ATENCIONES MÉDICAS",
-            "Registre diagnósticos, consulte atenciones y actualice sus estados.",
-            len(atenciones), "atenciones registradas",
-            "Gestionar atenciones", self.gestion_atenciones
+            1,
+            0,
+            "🩺",
+            "ATENCIONES MÉDICAS",
+            (
+                "Registre diagnósticos, consulte atenciones "
+                "y actualice sus estados."
+            ),
+            len(atenciones),
+            "atenciones registradas",
+            "Gestionar atenciones",
+            self.gestion_atenciones
         )
 
         crear_modulo(
-            1, 1, "📊", "REPORTES Y ESTADÍSTICAS",
-            "Consulte indicadores generales y reportes de pacientes, citas y atenciones.",
-            len(finalizadas), "atenciones finalizadas",
-            "Ver reportes", self.gestion_reportes
+            1,
+            1,
+            "📊",
+            "REPORTES Y ESTADÍSTICAS",
+            (
+                "Consulte indicadores generales y reportes "
+                "de pacientes, citas y atenciones."
+            ),
+            len(finalizadas),
+            "atenciones finalizadas",
+            "Ver reportes",
+            self.gestion_reportes
         )
 
         crear_modulo(
-            1, 2, "⌕", "BÚSQUEDA GLOBAL",
-            "Acceda rápidamente a pacientes o profesionales usando código o DNI.",
-            len(pacientes) + len(personal), "registros consultables",
-            "Buscar registros", lambda: self.buscar_global_desde_panel()
+            1,
+            2,
+            "⌕",
+            "BÚSQUEDA GLOBAL",
+            (
+                "Acceda rápidamente a pacientes o "
+                "profesionales usando código o DNI."
+            ),
+            len(pacientes) + len(personal),
+            "registros consultables",
+            "Buscar registros",
+            lambda:
+            self.buscar_global_desde_panel()
         )
 
         # =====================================================
         # PIE DEL PANEL
         # =====================================================
-        pie = tk.Frame(interior, bg=COLOR_FONDO)
-        pie.pack(fill="x", pady=(5, 8))
 
-        tk.Frame(pie, bg=COLOR_PANEL_CLARO, height=1).pack(fill="x", pady=(0, 9))
+        pie = tk.Frame(
+            interior,
+            bg=COLOR_FONDO
+        )
+
+        pie.pack(
+            fill="x",
+            pady=(5, 8)
+        )
+
+        tk.Frame(
+            pie,
+            bg=COLOR_PANEL_CLARO,
+            height=1
+        ).pack(
+            fill="x",
+            pady=(0, 9)
+        )
 
         tk.Label(
             pie,
-            text="SaluPro • Sistema de Salud Rural • Panel administrativo",
+            text=(
+                "SaluPro • Sistema de Salud Rural • "
+                "Panel administrativo"
+            ),
             font=FUENTE_PEQUENA,
             bg=COLOR_FONDO,
             fg=COLOR_GRIS_OSCURO
-        ).pack(side="left")
+        ).pack(
+            side="left"
+        )
 
         tk.Button(
             pie,
@@ -905,88 +1603,204 @@ class VentanaPrincipal:
             cursor="hand2",
             padx=12,
             pady=5
-        ).pack(side="right")
+        ).pack(
+            side="right"
+        )
 
-        for widget in (contenido, interior, zona):
-            widget.bind("<MouseWheel>", rueda_mouse)
+        # =====================================================
+        # CONFIGURACIÓN SCROLL
+        # =====================================================
+
+        self._configurar_scroll(
+            canvas,
+            [
+                contenido,
+                interior,
+                zona
+            ]
+        )
 
         canvas.update_idletasks()
-        canvas.configure(scrollregion=canvas.bbox("all"))
 
-    def _alternar_pantalla_completa(self, evento=None):
         try:
-            actual = bool(self.ventana.attributes("-fullscreen"))
-            self.ventana.attributes("-fullscreen", not actual)
+            canvas.configure(
+                scrollregion=canvas.bbox("all")
+            )
         except tk.TclError:
+            pass
+
+    # =========================================================
+    # PANTALLA COMPLETA
+    # =========================================================
+
+    def _alternar_pantalla_completa(
+        self,
+        evento=None
+    ):
+
+        try:
+
+            actual = bool(
+                self.ventana.attributes(
+                    "-fullscreen"
+                )
+            )
+
+            self.ventana.attributes(
+                "-fullscreen",
+                not actual
+            )
+
+        except tk.TclError:
+
             try:
+
                 estado = self.ventana.state()
-                self.ventana.state("normal" if estado == "zoomed" else "zoomed")
+
+                self.ventana.state(
+                    "normal"
+                    if estado == "zoomed"
+                    else "zoomed"
+                )
+
             except tk.TclError:
                 pass
+
+    # =========================================================
+    # VOLVER AL PANEL
+    # =========================================================
 
     def volver_panel_principal(self):
         """Regresa al panel administrativo dentro de la misma ventana."""
+
         actual = self._pantalla_actual
 
-        if actual is not None and actual is not self._pantalla_principal:
+        if (
+            actual is not None
+            and actual is not self._pantalla_principal
+        ):
+
             try:
-                actual._cerrando = True
-                tk.Frame.destroy(actual)
-            except (tk.TclError, AttributeError):
+
+                if hasattr(
+                    actual,
+                    "_cerrando"
+                ):
+                    actual._cerrando = True
+
+                tk.Frame.destroy(
+                    actual
+                )
+
+            except (
+                tk.TclError,
+                AttributeError
+            ):
                 pass
 
         if self._pantalla_principal is not None:
+
             try:
-                self._pantalla_principal.pack(fill="both", expand=True)
+
+                self._pantalla_principal.pack(
+                    fill="both",
+                    expand=True
+                )
+
                 self._pantalla_principal.lift()
+
             except tk.TclError:
                 pass
 
-        self._pantalla_actual = self._pantalla_principal
-        self._callback_volver_actual = self.volver_panel_principal
+        self._pantalla_actual = (
+            self._pantalla_principal
+        )
+
+        self._callback_volver_actual = (
+            self.volver_panel_principal
+        )
+
+    # =========================================================
+    # VOLVER A INICIO
+    # =========================================================
 
     def volver_a_inicio(self):
         """Reemplaza la pantalla administrativa por la pantalla de inicio."""
+
         try:
             self.sistema.cerrar()
         except Exception:
             pass
 
         if self.pantalla_inicio is not None:
+
             self._pantalla_actual = None
             self._pantalla_principal = None
             self._callback_volver_actual = None
+
             self.pantalla_inicio.mostrar()
+
             return
 
         from interfaz.pantalla_inicio import PantallaInicio
-        PantallaInicio(self.ventana).mostrar()
+
+        PantallaInicio(
+            self.ventana
+        ).mostrar()
+
+    # =========================================================
+    # LIMPIAR PANTALLA ACTUAL
+    # =========================================================
 
     def _limpiar_pantalla_actual(self):
-        """Elimina la pantalla actual sin abrir ni cerrar ventanas."""
+        """Elimina la pantalla actual de forma segura."""
+
         actual = self._pantalla_actual
 
         if actual is None:
             return
 
-        if actual is self._pantalla_principal:
-            try:
-                actual.pack_forget()
-            except tk.TclError:
-                pass
-            return
-
         try:
-            actual.cerrar_sin_volver()
-        except AttributeError:
-            try:
-                actual.destroy()
-            except tk.TclError:
-                pass
 
-    def _crear_pantalla_interna(self, titulo="SaluPro"):
+            if actual is self._pantalla_principal:
+
+                actual.pack_forget()
+
+            else:
+
+                if hasattr(
+                    actual,
+                    "cerrar_sin_volver"
+                ):
+
+                    actual.cerrar_sin_volver()
+
+                else:
+                    actual.destroy()
+
+        except (
+            tk.TclError,
+            AttributeError
+        ):
+            pass
+
+        finally:
+            self._pantalla_actual = None
+
+    # =========================================================
+    # CREAR PANTALLA INTERNA
+    # =========================================================
+
+    def _crear_pantalla_interna(
+        self,
+        titulo="SaluPro"
+    ):
         """Crea una pantalla dentro de la misma ventana principal."""
-        callback = self._callback_volver_actual or self.volver_panel_principal
+
+        callback = (
+            self._callback_volver_actual
+            or self.volver_panel_principal
+        )
 
         self._limpiar_pantalla_actual()
 
@@ -995,11 +1809,24 @@ class VentanaPrincipal:
             volver_callback=callback,
             titulo=titulo
         )
-        ventana.pack(fill="both", expand=True)
+
+        ventana.pack(
+            fill="both",
+            expand=True
+        )
+
         self._pantalla_actual = ventana
 
-        barra = tk.Frame(ventana, bg=COLOR_FONDO)
-        barra.pack(fill="x", padx=24, pady=(18, 0))
+        barra = tk.Frame(
+            ventana,
+            bg=COLOR_FONDO
+        )
+
+        barra.pack(
+            fill="x",
+            padx=24,
+            pady=(18, 0)
+        )
 
         boton_volver = tk.Button(
             barra,
@@ -1016,67 +1843,141 @@ class VentanaPrincipal:
             padx=13,
             pady=8
         )
-        boton_volver.pack(side="left")
+
+        boton_volver.pack(
+            side="left"
+        )
 
         boton_volver.bind(
             "<Enter>",
-            lambda evento: boton_volver.configure(bg=COLOR_ROJO_CLARO)
+            lambda evento:
+            boton_volver.configure(
+                bg=COLOR_ROJO_CLARO
+            )
         )
+
         boton_volver.bind(
             "<Leave>",
-            lambda evento: boton_volver.configure(bg=COLOR_PANEL_CLARO)
+            lambda evento:
+            boton_volver.configure(
+                bg=COLOR_PANEL_CLARO
+            )
         )
 
         return ventana
 
-    def _abrir_desde_menu(self, comando, volver_callback):
+    # =========================================================
+    # ABRIR DESDE MENÚ
+    # =========================================================
+
+    def _abrir_desde_menu(
+        self,
+        comando,
+        volver_callback
+    ):
         """Ejecuta una opción de menú conservando el destino de Volver."""
-        self._callback_volver_actual = volver_callback
+
+        self._callback_volver_actual = (
+            volver_callback
+        )
+
         comando()
 
-    def buscar_global(self, valor):
+    # =========================================================
+    # BÚSQUEDA GLOBAL
+    # =========================================================
+
+    def buscar_global(
+        self,
+        valor
+    ):
         """Busca un paciente o profesional por código o DNI."""
-        valor = str(valor).strip()
+
+        valor = str(
+            valor
+        ).strip()
 
         if not valor:
+
             messagebox.showwarning(
                 "Búsqueda rápida",
-                "Ingrese un código o DNI para realizar la búsqueda."
+                (
+                    "Ingrese un código o DNI "
+                    "para realizar la búsqueda."
+                )
             )
+
             return
 
         pacientes_encontrados = list(
-            self.sistema.buscar_paciente_por_codigo(valor)
+            self.sistema.buscar_paciente_por_codigo(
+                valor
+            )
         )
 
         profesionales_encontrados = list(
-            self.sistema.buscar_personal_por_codigo(valor)
+            self.sistema.buscar_personal_por_codigo(
+                valor
+            )
         )
 
-        if valor.isdigit() and len(valor) == 8:
-            for paciente in self.sistema.buscar_paciente_por_dni(valor):
+        if (
+            valor.isdigit()
+            and len(valor) == 8
+        ):
+
+            for paciente in (
+                self.sistema.buscar_paciente_por_dni(
+                    valor
+                )
+            ):
+
                 if paciente not in pacientes_encontrados:
-                    pacientes_encontrados.append(paciente)
+                    pacientes_encontrados.append(
+                        paciente
+                    )
 
-            for profesional in self.sistema.buscar_personal_por_dni(valor):
+            for profesional in (
+                self.sistema.buscar_personal_por_dni(
+                    valor
+                )
+            ):
+
                 if profesional not in profesionales_encontrados:
-                    profesionales_encontrados.append(profesional)
+                    profesionales_encontrados.append(
+                        profesional
+                    )
 
-        if not pacientes_encontrados and not profesionales_encontrados:
+        if (
+            not pacientes_encontrados
+            and not profesionales_encontrados
+        ):
+
             messagebox.showinfo(
                 "Búsqueda rápida",
-                "No se encontraron pacientes ni profesionales con ese código o DNI."
+                (
+                    "No se encontraron pacientes ni "
+                    "profesionales con ese código o DNI."
+                )
             )
+
             return
 
-        ventana = self._crear_pantalla_interna()
-        ventana.title("Búsqueda rápida - SaluPro")
-        ventana.geometry("760x560")
-        ventana.configure(bg=COLOR_FONDO)
-        ventana.transient(self.ventana)
+        ventana = self._crear_pantalla_interna(
+            "Búsqueda rápida - SaluPro"
+        )
 
-        marco = tk.Frame(ventana, bg=COLOR_FONDO)
-        marco.pack(fill="both", expand=True, padx=25, pady=22)
+        marco = tk.Frame(
+            ventana,
+            bg=COLOR_FONDO
+        )
+
+        marco.pack(
+            fill="both",
+            expand=True,
+            padx=25,
+            pady=22
+        )
 
         tk.Label(
             marco,
@@ -1084,21 +1985,31 @@ class VentanaPrincipal:
             font=FUENTE_TITULO,
             bg=COLOR_FONDO,
             fg=COLOR_BLANCO
-        ).pack(pady=(0, 5))
+        ).pack(
+            pady=(0, 5)
+        )
 
         valor_mostrado = (
             "********"
-            if valor.isdigit() and len(valor) == 8
+            if (
+                valor.isdigit()
+                and len(valor) == 8
+            )
             else valor
         )
 
         tk.Label(
             marco,
-            text=f"Coincidencias para: {valor_mostrado}",
+            text=(
+                f"Coincidencias para: "
+                f"{valor_mostrado}"
+            ),
             font=FUENTE_SUBTITULO,
             bg=COLOR_FONDO,
             fg=COLOR_GRIS
-        ).pack(pady=(0, 15))
+        ).pack(
+            pady=(0, 15)
+        )
 
         texto = tk.Text(
             marco,
@@ -1112,21 +2023,55 @@ class VentanaPrincipal:
             padx=14,
             pady=12
         )
-        texto.pack(fill="both", expand=True)
+
+        texto.pack(
+            fill="both",
+            expand=True
+        )
 
         if pacientes_encontrados:
-            texto.insert(tk.END, "PACIENTES\n")
-            texto.insert(tk.END, "=" * 60 + "\n\n")
+
+            texto.insert(
+                tk.END,
+                "PACIENTES\n"
+            )
+
+            texto.insert(
+                tk.END,
+                "=" * 60 + "\n\n"
+            )
+
             for paciente in pacientes_encontrados:
-                texto.insert(tk.END, paciente.mostrar_informacion() + "\n\n")
+
+                texto.insert(
+                    tk.END,
+                    paciente.mostrar_informacion()
+                    + "\n\n"
+                )
 
         if profesionales_encontrados:
-            texto.insert(tk.END, "PROFESIONALES\n")
-            texto.insert(tk.END, "=" * 60 + "\n\n")
-            for profesional in profesionales_encontrados:
-                texto.insert(tk.END, profesional.mostrar_informacion() + "\n\n")
 
-        texto.config(state="disabled")
+            texto.insert(
+                tk.END,
+                "PROFESIONALES\n"
+            )
+
+            texto.insert(
+                tk.END,
+                "=" * 60 + "\n\n"
+            )
+
+            for profesional in profesionales_encontrados:
+
+                texto.insert(
+                    tk.END,
+                    profesional.mostrar_informacion()
+                    + "\n\n"
+                )
+
+        texto.config(
+            state="disabled"
+        )
 
         tk.Button(
             marco,
@@ -1142,18 +2087,32 @@ class VentanaPrincipal:
             cursor="hand2",
             width=18,
             pady=7
-        ).pack(pady=(14, 0))
+        ).pack(
+            pady=(14, 0)
+        )
+
+    # =========================================================
+    # BÚSQUEDA GLOBAL DESDE PANEL
+    # =========================================================
 
     def buscar_global_desde_panel(self):
-        """Abre una ventana de búsqueda global desde el módulo del dashboard."""
-        ventana = self._crear_pantalla_interna()
-        ventana.title("Búsqueda global - SaluPro")
-        ventana.geometry("520x250")
-        ventana.configure(bg=COLOR_FONDO)
-        ventana.transient(self.ventana)
+        """Abre una pantalla de búsqueda global desde el dashboard."""
 
-        marco = tk.Frame(ventana, bg=COLOR_FONDO)
-        marco.pack(fill="both", expand=True, padx=30, pady=28)
+        ventana = self._crear_pantalla_interna(
+            "Búsqueda global - SaluPro"
+        )
+
+        marco = tk.Frame(
+            ventana,
+            bg=COLOR_FONDO
+        )
+
+        marco.pack(
+            fill="both",
+            expand=True,
+            padx=30,
+            pady=28
+        )
 
         tk.Label(
             marco,
@@ -1161,7 +2120,9 @@ class VentanaPrincipal:
             font=FUENTE_TITULO,
             bg=COLOR_FONDO,
             fg=COLOR_BLANCO
-        ).pack(pady=(0, 5))
+        ).pack(
+            pady=(0, 5)
+        )
 
         tk.Label(
             marco,
@@ -1169,7 +2130,9 @@ class VentanaPrincipal:
             font=FUENTE_NORMAL,
             bg=COLOR_FONDO,
             fg=COLOR_GRIS
-        ).pack(pady=(0, 12))
+        ).pack(
+            pady=(0, 12)
+        )
 
         entrada = tk.Entry(
             marco,
@@ -1181,21 +2144,39 @@ class VentanaPrincipal:
             bd=0,
             font=FUENTE_NORMAL
         )
-        entrada.pack(ipady=8)
-        self.configurar_limite_busqueda(entrada)
+
+        entrada.pack(
+            ipady=8
+        )
+
+        self.configurar_limite_busqueda(
+            entrada
+        )
 
         def ejecutar_busqueda():
+
             valor = entrada.get()
+
             if not valor.strip():
+
                 messagebox.showwarning(
                     "Búsqueda global",
                     "Ingrese un código o DNI."
                 )
-                return
-            ventana.cerrar_sin_volver()
-            self.buscar_global(valor)
 
-        tk.Button(
+                return
+
+            # Destruye únicamente esta pantalla.
+            ventana.cerrar_sin_volver()
+
+            # Se elimina la referencia a la pantalla destruida.
+            self._pantalla_actual = None
+
+            self.buscar_global(
+                valor
+            )
+
+        boton = tk.Button(
             marco,
             text="🔎  Buscar",
             command=ejecutar_busqueda,
@@ -1209,22 +2190,45 @@ class VentanaPrincipal:
             cursor="hand2",
             width=20,
             pady=8
-        ).pack(pady=18)
+        )
 
-        entrada.bind("<Return>", lambda evento: ejecutar_busqueda())
+        boton.pack(
+            pady=18
+        )
+
+        entrada.bind(
+            "<Return>",
+            lambda evento:
+            ejecutar_busqueda()
+        )
+
         entrada.focus_set()
 
-    def _crear_menu_gestion(self, titulo, descripcion, opciones, ancho=500, alto=500):
+    # =========================================================
+    # MENÚ DE GESTIÓN
+    # =========================================================
+
+    def _crear_menu_gestion(
+        self,
+        titulo,
+        descripcion,
+        opciones,
+        ancho=500,
+        alto=500
+    ):
         """Muestra el menú de gestión dentro de la misma ventana principal."""
 
-        # El botón Volver de este menú regresa al panel administrativo.
-        self._callback_volver_actual = self.volver_panel_principal
+        self._callback_volver_actual = (
+            self.volver_panel_principal
+        )
+
         self._limpiar_pantalla_actual()
 
         ventana = tk.Frame(
             self.ventana,
             bg=COLOR_FONDO
         )
+
         ventana.pack(
             fill="both",
             expand=True
@@ -1236,6 +2240,7 @@ class VentanaPrincipal:
             ventana,
             bg=COLOR_FONDO
         )
+
         contenedor.pack(
             fill="both",
             expand=True,
@@ -1247,6 +2252,7 @@ class VentanaPrincipal:
             contenedor,
             bg=COLOR_FONDO
         )
+
         barra_navegacion.pack(
             fill="x",
             pady=(0, 8)
@@ -1267,15 +2273,25 @@ class VentanaPrincipal:
             padx=12,
             pady=7
         )
-        boton_panel.pack(side="left")
+
+        boton_panel.pack(
+            side="left"
+        )
 
         boton_panel.bind(
             "<Enter>",
-            lambda evento: boton_panel.configure(bg=COLOR_ROJO_CLARO)
+            lambda evento:
+            boton_panel.configure(
+                bg=COLOR_ROJO_CLARO
+            )
         )
+
         boton_panel.bind(
             "<Leave>",
-            lambda evento: boton_panel.configure(bg=COLOR_PANEL_CLARO)
+            lambda evento:
+            boton_panel.configure(
+                bg=COLOR_PANEL_CLARO
+            )
         )
 
         tk.Label(
@@ -1309,22 +2325,35 @@ class VentanaPrincipal:
             pady=(0, 18)
         )
 
-        def ejecutar_opcion(comando):
-            # Al entrar a un submódulo, Volver reconstruye exactamente este menú.
-            callback_menu = lambda: self._crear_menu_gestion(
-                titulo,
-                descripcion,
-                opciones,
-                ancho,
-                alto
-            )
-            self._abrir_desde_menu(comando, callback_menu)
+        def ejecutar_opcion(
+            comando
+        ):
 
-        for texto, comando in opciones:
+            # Al entrar a un submódulo,
+            # Volver reconstruye exactamente este menú.
+            callback_menu = (
+                lambda:
+                self._crear_menu_gestion(
+                    titulo,
+                    descripcion,
+                    opciones,
+                    ancho,
+                    alto
+                )
+            )
+
+            self._abrir_desde_menu(
+                comando,
+                callback_menu
+            )
+
+        for texto_boton, comando in opciones:
+
             boton = tk.Button(
                 contenedor,
-                text=texto,
-                command=lambda c=comando: ejecutar_opcion(c),
+                text=texto_boton,
+                command=lambda c=comando:
+                ejecutar_opcion(c),
                 font=FUENTE_BOTON_GRANDE,
                 bg=COLOR_ROJO,
                 fg=COLOR_BLANCO,
@@ -1336,97 +2365,210 @@ class VentanaPrincipal:
                 width=30,
                 pady=10
             )
+
             boton.pack(
                 pady=6
             )
 
             boton.bind(
                 "<Enter>",
-                lambda evento, b=boton: b.configure(bg=COLOR_ROJO_CLARO)
+                lambda evento,
+                b=boton:
+                b.configure(
+                    bg=COLOR_ROJO_CLARO
+                )
             )
+
             boton.bind(
                 "<Leave>",
-                lambda evento, b=boton: b.configure(bg=COLOR_ROJO)
+                lambda evento,
+                b=boton:
+                b.configure(
+                    bg=COLOR_ROJO
+                )
             )
 
         return ventana
 
+    # =========================================================
+    # GESTIÓN DE PACIENTES
+    # =========================================================
+
     def gestion_pacientes(self):
         """Agrupa todas las funciones relacionadas con pacientes."""
+
         self._crear_menu_gestion(
             "Gestión de pacientes",
-            "Administre los pacientes registrados y consulte su historial.",
+            (
+                "Administre los pacientes registrados "
+                "y consulte su historial."
+            ),
             [
-                ("Registrar paciente", self.registrar_paciente),
-                ("Ver pacientes", self.ver_pacientes),
-                ("Buscar paciente", self.buscar_paciente),
-                ("Historial de pacientes", self.historial_pacientes),
+                (
+                    "Registrar paciente",
+                    self.registrar_paciente
+                ),
+                (
+                    "Ver pacientes",
+                    self.ver_pacientes
+                ),
+                (
+                    "Buscar paciente",
+                    self.buscar_paciente
+                ),
+                (
+                    "Historial de pacientes",
+                    self.historial_pacientes
+                ),
             ],
             ancho=520,
             alto=520
         )
 
+    # =========================================================
+    # GESTIÓN DE PROFESIONALES
+    # =========================================================
+
     def gestion_profesionales(self):
         """Agrupa todas las funciones relacionadas con profesionales."""
+
         self._crear_menu_gestion(
             "Gestión de profesionales",
-            "Administre el personal de salud y consulte su actividad registrada.",
+            (
+                "Administre el personal de salud "
+                "y consulte su actividad registrada."
+            ),
             [
-                ("Registrar profesional", self.registrar_personal),
-                ("Ver profesionales", self.ver_personal),
-                ("Buscar profesional", self.buscar_personal),
-                ("Historial de profesionales", self.historial_profesionales),
+                (
+                    "Registrar profesional",
+                    self.registrar_personal
+                ),
+                (
+                    "Ver profesionales",
+                    self.ver_personal
+                ),
+                (
+                    "Buscar profesional",
+                    self.buscar_personal
+                ),
+                (
+                    "Historial de profesionales",
+                    self.historial_profesionales
+                ),
             ],
             ancho=540,
             alto=520
         )
 
+    # =========================================================
+    # GESTIÓN DE CITAS
+    # =========================================================
+
     def gestion_citas(self):
         """Agrupa las funciones de agenda y estados de citas."""
+
         self._crear_menu_gestion(
             "Gestión de citas",
-            "Administre la agenda, consulte citas y actualice sus estados.",
+            (
+                "Administre la agenda, consulte citas "
+                "y actualice sus estados."
+            ),
             [
-                ("Registrar cita", self.registrar_cita),
-                ("Citas pendientes", self.ver_citas),
-                ("Cambiar estado", self.cambiar_estado_cita),
-                ("Citas para reprogramar", self.ver_citas_reprogramadas),
+                (
+                    "Registrar cita",
+                    self.registrar_cita
+                ),
+                (
+                    "Citas pendientes",
+                    self.ver_citas
+                ),
+                (
+                    "Cambiar estado",
+                    self.cambiar_estado_cita
+                ),
+                (
+                    "Citas para reprogramar",
+                    self.ver_citas_reprogramadas
+                ),
             ],
             ancho=520,
             alto=520
         )
 
+    # =========================================================
+    # GESTIÓN DE ATENCIONES
+    # =========================================================
+
     def gestion_atenciones(self):
         """Agrupa las funciones de atenciones médicas."""
+
         self._crear_menu_gestion(
             "Atenciones médicas",
-            "Consulte, registre y actualice las atenciones asociadas a las citas.",
+            (
+                "Consulte, registre y actualice las "
+                "atenciones asociadas a las citas."
+            ),
             [
-                ("Registrar atención", self.registrar_atencion),
-                ("Ver atenciones", self.ver_atenciones),
-                ("Cambiar estado", self.cambiar_estado_atencion),
+                (
+                    "Registrar atención",
+                    self.registrar_atencion
+                ),
+                (
+                    "Ver atenciones",
+                    self.ver_atenciones
+                ),
+                (
+                    "Cambiar estado",
+                    self.cambiar_estado_atencion
+                ),
             ],
             ancho=520,
             alto=460
         )
 
+    # =========================================================
+    # GESTIÓN DE REPORTES
+    # =========================================================
+
     def gestion_reportes(self):
         """Agrupa estadísticas y reportes del sistema."""
+
         self._crear_menu_gestion(
             "Reportes y estadísticas",
-            "Consulte los principales indicadores y reportes generados por SaluPro.",
+            (
+                "Consulte los principales indicadores "
+                "y reportes generados por SaluPro."
+            ),
             [
-                ("Ver estadísticas", self.ver_estadisticas),
-                ("Ver reportes", self.ver_reportes),
+                (
+                    "Ver estadísticas",
+                    self.ver_estadisticas
+                ),
+                (
+                    "Ver reportes",
+                    self.ver_reportes
+                ),
             ],
             ancho=520,
             alto=400
         )
 
+    # =========================================================
+    # ACTUALIZAR DASHBOARD
+    # =========================================================
+
     def actualizar_dashboard(self):
         """Recarga el panel para mostrar los datos actuales."""
+
         for widget in self.ventana.winfo_children():
-            widget.destroy()
+
+            try:
+                widget.destroy()
+            except tk.TclError:
+                pass
+
+        self._pantalla_actual = None
+        self._pantalla_principal = None
 
         self.crear_interfaz()
 
@@ -1434,15 +2576,24 @@ class VentanaPrincipal:
     # VALIDACIÓN DNI
     # =========================================================
 
-    def validar_dni(self, dni):
+    def validar_dni(
+        self,
+        dni
+    ):
         """Delega la validación del DNI a la capa común de dominio."""
-        return validar_dni_valor(dni)
+
+        return validar_dni_valor(
+            dni
+        )
 
     # =========================================================
     # CREAR CAMPO DNI
     # =========================================================
 
-    def crear_campo_dni(self, ventana):
+    def crear_campo_dni(
+        self,
+        ventana
+    ):
 
         marco = tk.Frame(
             ventana
@@ -1464,7 +2615,9 @@ class VentanaPrincipal:
 
         entrada.pack()
 
-        def validar_caracteres(nuevo_valor):
+        def validar_caracteres(
+            nuevo_valor
+        ):
 
             if nuevo_valor == "":
                 return True
@@ -1474,9 +2627,62 @@ class VentanaPrincipal:
                 and len(nuevo_valor) <= 8
             )
 
-        validacion = (
-            ventana.register(
-                validar_caracteres
+        validacion = ventana.register(
+            validar_caracteres
+        )
+
+        entrada.config(
+            validate="key",
+            validatecommand=(
+                validacion,
+                "%P"
+            )
+        )
+
+        return entrada
+
+    # =========================================================
+    # VALIDAR BÚSQUEDA
+    # =========================================================
+
+    def validar_entrada_busqueda(
+        self,
+        nuevo_valor,
+        maximo=8
+    ):
+        """Valida entradas de búsqueda sin permitir símbolos ni exceso."""
+
+        if nuevo_valor == "":
+            return True
+
+        return (
+            nuevo_valor.isalnum()
+            and len(nuevo_valor) <= maximo
+        )
+
+    # =========================================================
+    # CONFIGURAR LÍMITE DE BÚSQUEDA
+    # =========================================================
+
+    def configurar_limite_busqueda(
+        self,
+        entrada,
+        ventana=None,
+        maximo=8
+    ):
+        """Configura el límite de caracteres de un campo de búsqueda."""
+
+        registro = (
+            ventana
+            if ventana is not None
+            else self.ventana
+        )
+
+        validacion = registro.register(
+            lambda valor:
+            self.validar_entrada_busqueda(
+                valor,
+                maximo
             )
         )
 
@@ -1490,31 +2696,14 @@ class VentanaPrincipal:
 
         return entrada
 
-    def validar_entrada_busqueda(self, nuevo_valor, maximo=8):
-        """Valida entradas de búsqueda sin permitir símbolos ni exceso de longitud."""
-        if nuevo_valor == "":
-            return True
-        return nuevo_valor.isalnum() and len(nuevo_valor) <= maximo
-
-    def configurar_limite_busqueda(self, entrada, ventana=None, maximo=8):
-        """Configura el límite de caracteres de un campo de búsqueda."""
-        registro = ventana if ventana is not None else self.ventana
-
-        validacion = registro.register(
-            lambda valor: self.validar_entrada_busqueda(valor, maximo)
-        )
-
-        entrada.config(
-            validate="key",
-            validatecommand=(validacion, "%P")
-        )
-        return entrada
-
     # =========================================================
     # FECHA
     # =========================================================
 
-    def crear_campo_fecha(self, ventana):
+    def crear_campo_fecha(
+        self,
+        ventana
+    ):
 
         marco = tk.Frame(
             ventana
@@ -1583,7 +2772,6 @@ class VentanaPrincipal:
                 "Down",
                 "Tab"
             ):
-
                 return
 
             contenido = entrada.get()
@@ -1651,7 +2839,10 @@ class VentanaPrincipal:
     # VALIDAR FECHA
     # =========================================================
 
-    def validar_fecha(self, fecha):
+    def validar_fecha(
+        self,
+        fecha
+    ):
 
         try:
 
@@ -1671,7 +2862,10 @@ class VentanaPrincipal:
 
         año = fecha_convertida.year
 
-        if año < 2026 or año > 2035:
+        if (
+            año < 2026
+            or año > 2035
+        ):
 
             raise ValueError(
                 "El año debe estar entre 2026 y 2035."
@@ -1693,7 +2887,9 @@ class VentanaPrincipal:
 
         while True:
 
-            codigo = f"CMP{numero:03d}"
+            codigo = (
+                f"CMP{numero:03d}"
+            )
 
             existe = any(
                 profesional.codigo_profesional
@@ -1713,14 +2909,8 @@ class VentanaPrincipal:
 
     def ver_pacientes(self):
 
-        ventana = self._crear_pantalla_interna()
-
-        ventana.title(
+        ventana = self._crear_pantalla_interna(
             "Pacientes registrados"
-        )
-
-        ventana.geometry(
-            "750x450"
         )
 
         texto = tk.Text(
@@ -1745,6 +2935,10 @@ class VentanaPrincipal:
                 "No existen pacientes registrados."
             )
 
+            texto.config(
+                state="disabled"
+            )
+
             return
 
         for paciente in pacientes:
@@ -1755,20 +2949,18 @@ class VentanaPrincipal:
                 + "\n\n"
             )
 
+        texto.config(
+            state="disabled"
+        )
+
     # =========================================================
     # REGISTRAR PACIENTE
     # =========================================================
 
     def registrar_paciente(self):
 
-        ventana = self._crear_pantalla_interna()
-
-        ventana.title(
+        ventana = self._crear_pantalla_interna(
             "Registrar paciente"
-        )
-
-        ventana.geometry(
-            "450x430"
         )
 
         codigo_generado = (
@@ -1804,7 +2996,9 @@ class VentanaPrincipal:
 
         entrada_dni.pack()
 
-        def validar_dni_tecla(nuevo_valor):
+        def validar_dni_tecla(
+            nuevo_valor
+        ):
 
             if nuevo_valor == "":
                 return True
@@ -1866,7 +3060,9 @@ class VentanaPrincipal:
                     codigo_generado,
                     dni,
                     entrada_nombre.get(),
-                    int(entrada_edad.get())
+                    int(
+                        entrada_edad.get()
+                    )
                 )
 
                 self.sistema.registrar_paciente(
@@ -1910,31 +3106,68 @@ class VentanaPrincipal:
 
     def buscar_paciente(self):
         """Muestra la búsqueda de pacientes dentro de la ventana principal."""
+
         self._mostrar_busqueda_personas(
             titulo="Buscar paciente",
             etiqueta="Buscar paciente por:",
             tipo_profesional=False
         )
 
-    def _mostrar_busqueda_personas(self, titulo, etiqueta, tipo_profesional=False):
-        """Construye una búsqueda de pacientes/profesionales en la misma ventana."""
+    # =========================================================
+    # BÚSQUEDA DE PERSONAS
+    # =========================================================
+
+    def _mostrar_busqueda_personas(
+        self,
+        titulo,
+        etiqueta,
+        tipo_profesional=False
+    ):
+        """Construye una búsqueda de pacientes/profesionales."""
 
         self._limpiar_pantalla_actual()
 
-        ventana = tk.Frame(self.ventana, bg=COLOR_FONDO)
-        ventana.pack(fill="both", expand=True)
+        ventana = tk.Frame(
+            self.ventana,
+            bg=COLOR_FONDO
+        )
+
+        ventana.pack(
+            fill="both",
+            expand=True
+        )
+
         self._pantalla_actual = ventana
 
-        contenedor = tk.Frame(ventana, bg=COLOR_FONDO)
-        contenedor.pack(fill="both", expand=True, padx=35, pady=25)
+        contenedor = tk.Frame(
+            ventana,
+            bg=COLOR_FONDO
+        )
 
-        barra = tk.Frame(contenedor, bg=COLOR_FONDO)
-        barra.pack(fill="x", pady=(0, 18))
+        contenedor.pack(
+            fill="both",
+            expand=True,
+            padx=35,
+            pady=25
+        )
+
+        barra = tk.Frame(
+            contenedor,
+            bg=COLOR_FONDO
+        )
+
+        barra.pack(
+            fill="x",
+            pady=(0, 18)
+        )
 
         boton_volver = tk.Button(
             barra,
             text="←  Volver",
-            command=self._callback_volver_actual or self.volver_panel_principal,
+            command=(
+                self._callback_volver_actual
+                or self.volver_panel_principal
+            ),
             font=FUENTE_BOTON,
             bg=COLOR_PANEL_CLARO,
             fg=COLOR_BLANCO,
@@ -1946,7 +3179,10 @@ class VentanaPrincipal:
             padx=14,
             pady=8
         )
-        boton_volver.pack(side="left")
+
+        boton_volver.pack(
+            side="left"
+        )
 
         tk.Label(
             contenedor,
@@ -1954,7 +3190,10 @@ class VentanaPrincipal:
             font=FUENTE_TITULO,
             bg=COLOR_FONDO,
             fg=COLOR_BLANCO
-        ).pack(anchor="w", pady=(0, 4))
+        ).pack(
+            anchor="w",
+            pady=(0, 4)
+        )
 
         tk.Label(
             contenedor,
@@ -1962,18 +3201,34 @@ class VentanaPrincipal:
             font=FUENTE_NORMAL_BOLD,
             bg=COLOR_FONDO,
             fg=COLOR_GRIS_CLARO
-        ).pack(anchor="w", pady=(0, 8))
+        ).pack(
+            anchor="w",
+            pady=(0, 8)
+        )
 
-        tipo_var = tk.StringVar(value="Código")
-        fila_busqueda = tk.Frame(contenedor, bg=COLOR_FONDO)
-        fila_busqueda.pack(fill="x", pady=(0, 15))
+        tipo_var = tk.StringVar(
+            value="Código"
+        )
+
+        fila_busqueda = tk.Frame(
+            contenedor,
+            bg=COLOR_FONDO
+        )
+
+        fila_busqueda.pack(
+            fill="x",
+            pady=(0, 15)
+        )
 
         tk.OptionMenu(
             fila_busqueda,
             tipo_var,
             "Código",
             "DNI"
-        ).pack(side="left", padx=(0, 10))
+        ).pack(
+            side="left",
+            padx=(0, 10)
+        )
 
         entrada_busqueda = tk.Entry(
             fila_busqueda,
@@ -1985,15 +3240,22 @@ class VentanaPrincipal:
             bd=0,
             font=FUENTE_NORMAL
         )
-        entrada_busqueda.pack(side="left", ipady=8)
-        self.configurar_limite_busqueda(entrada_busqueda, self.ventana)
 
-        # El botón Buscar queda junto al campo para que la acción sea visible
-        # y también se mantiene el acceso mediante la tecla Enter.
+        entrada_busqueda.pack(
+            side="left",
+            ipady=8
+        )
+
+        self.configurar_limite_busqueda(
+            entrada_busqueda,
+            self.ventana
+        )
+
         boton_buscar = tk.Button(
             fila_busqueda,
             text="🔎  Buscar",
-            command=lambda: buscar(),
+            command=lambda:
+            buscar(),
             font=FUENTE_BOTON,
             bg=COLOR_ROJO,
             fg=COLOR_BLANCO,
@@ -2005,7 +3267,11 @@ class VentanaPrincipal:
             padx=14,
             pady=7
         )
-        boton_buscar.pack(side="left", padx=(10, 0))
+
+        boton_buscar.pack(
+            side="left",
+            padx=(10, 0)
+        )
 
         resultado = tk.Text(
             contenedor,
@@ -2018,53 +3284,152 @@ class VentanaPrincipal:
             bd=0,
             font=FUENTE_NORMAL
         )
-        resultado.pack(fill="both", expand=True, pady=(5, 12))
+
+        resultado.pack(
+            fill="both",
+            expand=True,
+            pady=(5, 12)
+        )
 
         def limpiar_entrada(*args):
-            entrada_busqueda.delete(0, tk.END)
-            resultado.delete("1.0", tk.END)
 
-        tipo_var.trace_add("write", limpiar_entrada)
+            entrada_busqueda.delete(
+                0,
+                tk.END
+            )
+
+            resultado.config(
+                state="normal"
+            )
+
+            resultado.delete(
+                "1.0",
+                tk.END
+            )
+
+            resultado.config(
+                state="disabled"
+            )
+
+        tipo_var.trace_add(
+            "write",
+            limpiar_entrada
+        )
 
         def buscar():
+
             try:
+
                 tipo = tipo_var.get()
-                valor = entrada_busqueda.get().strip()
+
+                valor = (
+                    entrada_busqueda
+                    .get()
+                    .strip()
+                )
 
                 if not valor:
-                    raise ValueError("Debe ingresar un valor para realizar la búsqueda.")
+
+                    raise ValueError(
+                        "Debe ingresar un valor "
+                        "para realizar la búsqueda."
+                    )
 
                 if tipo_profesional:
-                    if tipo == "Código":
-                        registros = self.sistema.buscar_personal_por_codigo(valor)
-                    else:
-                        registros = self.sistema.buscar_personal_por_dni(
-                            self.validar_dni(valor)
-                        )
-                    mensaje_vacio = "No se encontró personal."
-                else:
-                    if tipo == "Código":
-                        registros = self.sistema.buscar_paciente_por_codigo(valor)
-                    else:
-                        registros = self.sistema.buscar_paciente_por_dni(
-                            self.validar_dni(valor)
-                        )
-                    mensaje_vacio = "No se encontraron pacientes."
 
-                resultado.delete("1.0", tk.END)
+                    if tipo == "Código":
+
+                        registros = (
+                            self.sistema
+                            .buscar_personal_por_codigo(
+                                valor
+                            )
+                        )
+
+                    else:
+
+                        registros = (
+                            self.sistema
+                            .buscar_personal_por_dni(
+                                self.validar_dni(
+                                    valor
+                                )
+                            )
+                        )
+
+                    mensaje_vacio = (
+                        "No se encontró personal."
+                    )
+
+                else:
+
+                    if tipo == "Código":
+
+                        registros = (
+                            self.sistema
+                            .buscar_paciente_por_codigo(
+                                valor
+                            )
+                        )
+
+                    else:
+
+                        registros = (
+                            self.sistema
+                            .buscar_paciente_por_dni(
+                                self.validar_dni(
+                                    valor
+                                )
+                            )
+                        )
+
+                    mensaje_vacio = (
+                        "No se encontraron pacientes."
+                    )
+
+                resultado.config(
+                    state="normal"
+                )
+
+                resultado.delete(
+                    "1.0",
+                    tk.END
+                )
 
                 if not registros:
-                    resultado.insert(tk.END, mensaje_vacio)
+
+                    resultado.insert(
+                        tk.END,
+                        mensaje_vacio
+                    )
+
+                    resultado.config(
+                        state="disabled"
+                    )
+
                     return
 
                 for registro in registros:
+
                     resultado.insert(
                         tk.END,
-                        registro.mostrar_informacion() + "\n\n"
+                        registro.mostrar_informacion()
+                        + "\n\n"
                     )
 
-            except (ValueError, TypeError) as error:
-                messagebox.showerror("Error", str(error))
+                resultado.config(
+                    state="disabled"
+                )
+
+            except (
+                ValueError,
+                TypeError
+            ) as error:
+
+                messagebox.showerror(
+                    "Error",
+                    str(error)
+                )
 
         boton_buscar.configure(
             width=18
@@ -2072,19 +3437,29 @@ class VentanaPrincipal:
 
         boton_buscar.bind(
             "<Enter>",
-            lambda evento: boton_buscar.configure(
+            lambda evento:
+            boton_buscar.configure(
                 bg=COLOR_ROJO_CLARO
             )
         )
+
         boton_buscar.bind(
             "<Leave>",
-            lambda evento: boton_buscar.configure(
+            lambda evento:
+            boton_buscar.configure(
                 bg=COLOR_ROJO
             )
         )
 
-        barra_acciones = tk.Frame(contenedor, bg=COLOR_FONDO)
-        barra_acciones.pack(fill="x", pady=(0, 5))
+        barra_acciones = tk.Frame(
+            contenedor,
+            bg=COLOR_FONDO
+        )
+
+        barra_acciones.pack(
+            fill="x",
+            pady=(0, 5)
+        )
 
         boton_volver_inferior = tk.Button(
             barra_acciones,
@@ -2101,10 +3476,22 @@ class VentanaPrincipal:
             width=15,
             pady=9
         )
-        boton_volver_inferior.pack(side="left")
 
-        entrada_busqueda.bind("<Return>", lambda evento: buscar())
+        boton_volver_inferior.pack(
+            side="left"
+        )
+
+        entrada_busqueda.bind(
+            "<Return>",
+            lambda evento:
+            buscar()
+        )
+
         entrada_busqueda.focus_set()
+
+        resultado.config(
+            state="disabled"
+        )
 
     # =========================================================
     # VER PERSONAL
@@ -2112,14 +3499,8 @@ class VentanaPrincipal:
 
     def ver_personal(self):
 
-        ventana = self._crear_pantalla_interna()
-
-        ventana.title(
+        ventana = self._crear_pantalla_interna(
             "Personal de salud"
-        )
-
-        ventana.geometry(
-            "850x450"
         )
 
         texto = tk.Text(
@@ -2144,6 +3525,10 @@ class VentanaPrincipal:
                 "No existe personal registrado."
             )
 
+            texto.config(
+                state="disabled"
+            )
+
             return
 
         for profesional in personal:
@@ -2154,20 +3539,18 @@ class VentanaPrincipal:
                 + "\n\n"
             )
 
+        texto.config(
+            state="disabled"
+        )
+
     # =========================================================
     # REGISTRAR PERSONAL
     # =========================================================
 
     def registrar_personal(self):
 
-        ventana = self._crear_pantalla_interna()
-
-        ventana.title(
+        ventana = self._crear_pantalla_interna(
             "Registrar personal"
-        )
-
-        ventana.geometry(
-            "500x500"
         )
 
         codigo_generado = (
@@ -2203,7 +3586,9 @@ class VentanaPrincipal:
 
         entrada_dni.pack()
 
-        def validar_dni_tecla(nuevo_valor):
+        def validar_dni_tecla(
+            nuevo_valor
+        ):
 
             if nuevo_valor == "":
                 return True
@@ -2297,7 +3682,9 @@ class VentanaPrincipal:
                     codigo_generado,
                     dni,
                     entrada_nombre.get(),
-                    int(entrada_edad.get()),
+                    int(
+                        entrada_edad.get()
+                    ),
                     especialidad_var.get()
                 )
 
@@ -2341,7 +3728,8 @@ class VentanaPrincipal:
     # =========================================================
 
     def buscar_personal(self):
-        """Muestra la búsqueda de profesionales dentro de la ventana principal."""
+        """Muestra la búsqueda de profesionales."""
+
         self._mostrar_busqueda_personas(
             titulo="Buscar profesional",
             etiqueta="Buscar profesional por:",
@@ -2354,14 +3742,8 @@ class VentanaPrincipal:
 
     def ver_citas(self):
 
-        ventana = self._crear_pantalla_interna()
-
-        ventana.title(
+        ventana = self._crear_pantalla_interna(
             "Citas pendientes"
-        )
-
-        ventana.geometry(
-            "850x500"
         )
 
         texto = tk.Text(
@@ -2376,7 +3758,8 @@ class VentanaPrincipal:
         )
 
         citas = (
-            self.sistema.obtener_citas_pendientes()
+            self.sistema
+            .obtener_citas_pendientes()
         )
 
         if not citas:
@@ -2384,6 +3767,10 @@ class VentanaPrincipal:
             texto.insert(
                 tk.END,
                 "No existen citas pendientes."
+            )
+
+            texto.config(
+                state="disabled"
             )
 
             return
@@ -2406,20 +3793,18 @@ class VentanaPrincipal:
                 + "\n\n"
             )
 
+        texto.config(
+            state="disabled"
+        )
+
     # =========================================================
     # CITAS PARA REPROGRAMAR
     # =========================================================
 
     def ver_citas_reprogramadas(self):
 
-        ventana = self._crear_pantalla_interna()
-
-        ventana.title(
+        ventana = self._crear_pantalla_interna(
             "Citas para reprogramar"
-        )
-
-        ventana.geometry(
-            "850x500"
         )
 
         texto = tk.Text(
@@ -2445,6 +3830,10 @@ class VentanaPrincipal:
                 "No existen citas para reprogramar."
             )
 
+            texto.config(
+                state="disabled"
+            )
+
             return
 
         texto.insert(
@@ -2464,6 +3853,10 @@ class VentanaPrincipal:
                 cita.mostrar_informacion()
                 + "\n\n"
             )
+
+        texto.config(
+            state="disabled"
+        )
 
     # =========================================================
     # REGISTRAR CITA
@@ -2497,14 +3890,8 @@ class VentanaPrincipal:
 
             return
 
-        ventana = self._crear_pantalla_interna()
-
-        ventana.title(
+        ventana = self._crear_pantalla_interna(
             "Registrar cita"
-        )
-
-        ventana.geometry(
-            "500x600"
         )
 
         codigo_generado = (
@@ -2701,7 +4088,8 @@ class VentanaPrincipal:
 
         citas = [
             cita
-            for cita in self.sistema.obtener_citas()
+            for cita
+            in self.sistema.obtener_citas()
             if cita.estado != "Atendida"
         ]
 
@@ -2717,14 +4105,8 @@ class VentanaPrincipal:
 
             return
 
-        ventana = self._crear_pantalla_interna()
-
-        ventana.title(
+        ventana = self._crear_pantalla_interna(
             "Cambiar estado de cita"
-        )
-
-        ventana.geometry(
-            "650x450"
         )
 
         tk.Label(
@@ -2764,9 +4146,7 @@ class VentanaPrincipal:
             pady=15
         )
 
-        estado_var = tk.StringVar(
-            value="Pendiente"
-        )
+        estado_var = tk.StringVar()
 
         tk.OptionMenu(
             ventana,
@@ -2814,11 +4194,14 @@ class VentanaPrincipal:
                     )
                 )
 
+                estado_var.set(
+                    cita.estado
+                )
+
             except (
                 ValueError,
                 StopIteration
             ):
-
                 pass
 
         cita_var.trace_add(
@@ -2903,14 +4286,8 @@ class VentanaPrincipal:
 
     def ver_atenciones(self):
 
-        ventana = self._crear_pantalla_interna()
-
-        ventana.title(
+        ventana = self._crear_pantalla_interna(
             "Atenciones médicas"
-        )
-
-        ventana.geometry(
-            "900x500"
         )
 
         texto = tk.Text(
@@ -2935,6 +4312,10 @@ class VentanaPrincipal:
                 "No existen atenciones registradas."
             )
 
+            texto.config(
+                state="disabled"
+            )
+
             return
 
         texto.insert(
@@ -2954,6 +4335,10 @@ class VentanaPrincipal:
                 atencion.mostrar_informacion()
                 + "\n\n"
             )
+
+        texto.config(
+            state="disabled"
+        )
 
     # =========================================================
     # REGISTRAR ATENCIÓN
@@ -2998,14 +4383,8 @@ class VentanaPrincipal:
 
             return
 
-        ventana = self._crear_pantalla_interna()
-
-        ventana.title(
+        ventana = self._crear_pantalla_interna(
             "Registrar atención"
-        )
-
-        ventana.geometry(
-            "550x500"
         )
 
         codigo_generado = (
@@ -3171,14 +4550,8 @@ class VentanaPrincipal:
 
             return
 
-        ventana = self._crear_pantalla_interna()
-
-        ventana.title(
+        ventana = self._crear_pantalla_interna(
             "Cambiar estado de atención"
-        )
-
-        ventana.geometry(
-            "700x450"
         )
 
         tk.Label(
@@ -3217,9 +4590,7 @@ class VentanaPrincipal:
             pady=15
         )
 
-        estado_var = tk.StringVar(
-            value="Pendiente"
-        )
+        estado_var = tk.StringVar()
 
         tk.OptionMenu(
             ventana,
@@ -3269,11 +4640,15 @@ class VentanaPrincipal:
                     )
                 )
 
+                # Ahora el selector comienza con el estado real.
+                estado_var.set(
+                    atencion.estado
+                )
+
             except (
                 ValueError,
                 StopIteration
             ):
-
                 pass
 
         atencion_var.trace_add(
@@ -3368,19 +4743,16 @@ class VentanaPrincipal:
 
             messagebox.showwarning(
                 "Aviso",
-                "No existen pacientes ni profesionales registrados."
+                (
+                    "No existen pacientes ni "
+                    "profesionales registrados."
+                )
             )
 
             return
 
-        ventana = self._crear_pantalla_interna()
-
-        ventana.title(
+        ventana = self._crear_pantalla_interna(
             "Historial clínico"
-        )
-
-        ventana.geometry(
-            "500x400"
         )
 
         tk.Label(
@@ -3459,19 +4831,8 @@ class VentanaPrincipal:
 
             return
 
-        ventana = self._crear_pantalla_interna()
-
-        ventana.title(
+        ventana = self._crear_pantalla_interna(
             "Historial de pacientes"
-        )
-
-        ventana.geometry(
-            "1050x720"
-        )
-
-        ventana.minsize(
-            850,
-            600
         )
 
         tk.Label(
@@ -3485,8 +4846,8 @@ class VentanaPrincipal:
         tk.Label(
             ventana,
             text=(
-                "Consulte las citas y atenciones médicas registradas "
-                "del paciente."
+                "Consulte las citas y atenciones médicas "
+                "registradas del paciente."
             ),
             font=("Arial", 11)
         ).pack(
@@ -3540,7 +4901,11 @@ class VentanaPrincipal:
             column=2,
             padx=5
         )
-        self.configurar_limite_busqueda(entrada_busqueda, ventana)
+
+        self.configurar_limite_busqueda(
+            entrada_busqueda,
+            ventana
+        )
 
         # =====================================================
         # ÁREA DE RESULTADOS CON SCROLL
@@ -3609,7 +4974,9 @@ class VentanaPrincipal:
 
                     resultados = (
                         self.sistema
-                        .buscar_paciente_por_codigo(valor)
+                        .buscar_paciente_por_codigo(
+                            valor
+                        )
                     )
 
                 else:
@@ -3620,10 +4987,16 @@ class VentanaPrincipal:
 
                     resultados = (
                         self.sistema
-                        .buscar_paciente_por_dni(dni)
+                        .buscar_paciente_por_dni(
+                            dni
+                        )
                     )
 
-                paciente = resultados[0] if resultados else None
+                paciente = (
+                    resultados[0]
+                    if resultados
+                    else None
+                )
 
                 if paciente is None:
 
@@ -3641,19 +5014,27 @@ class VentanaPrincipal:
                 )
 
                 # =================================================
-                # OBTENER TODOS LOS REGISTROS DEL PACIENTE
+                # OBTENER REGISTROS
                 # =================================================
 
                 citas = [
                     cita
-                    for cita in self.sistema.obtener_citas()
-                    if cita.paciente.codigo == paciente.codigo
+                    for cita
+                    in self.sistema.obtener_citas()
+                    if (
+                        cita.paciente.codigo
+                        == paciente.codigo
+                    )
                 ]
 
                 atenciones = [
                     atencion
-                    for atencion in self.sistema.obtener_atenciones()
-                    if atencion.paciente.codigo == paciente.codigo
+                    for atencion
+                    in self.sistema.obtener_atenciones()
+                    if (
+                        atencion.paciente.codigo
+                        == paciente.codigo
+                    )
                 ]
 
                 # =================================================
@@ -3723,7 +5104,10 @@ class VentanaPrincipal:
 
                     texto.insert(
                         tk.END,
-                        "El paciente no tiene citas registradas.\n\n"
+                        (
+                            "El paciente no tiene "
+                            "citas registradas.\n\n"
+                        )
                     )
 
                 else:
@@ -3810,7 +5194,10 @@ class VentanaPrincipal:
 
                     texto.insert(
                         tk.END,
-                        "El paciente no tiene atenciones registradas.\n"
+                        (
+                            "El paciente no tiene "
+                            "atenciones registradas.\n"
+                        )
                     )
 
                 else:
@@ -3913,6 +5300,15 @@ class VentanaPrincipal:
                     state="normal"
                 )
 
+                texto.delete(
+                    "1.0",
+                    tk.END
+                )
+
+                texto.config(
+                    state="disabled"
+                )
+
                 messagebox.showerror(
                     "Error",
                     str(error)
@@ -3996,14 +5392,8 @@ class VentanaPrincipal:
 
             return
 
-        ventana = self._crear_pantalla_interna()
-
-        ventana.title(
+        ventana = self._crear_pantalla_interna(
             "Historial de profesionales"
-        )
-
-        ventana.geometry(
-            "1000x700"
         )
 
         tk.Label(
@@ -4060,7 +5450,11 @@ class VentanaPrincipal:
             column=2,
             padx=5
         )
-        self.configurar_limite_busqueda(entrada_busqueda, ventana)
+
+        self.configurar_limite_busqueda(
+            entrada_busqueda,
+            ventana
+        )
 
         texto = tk.Text(
             ventana,
@@ -4097,7 +5491,10 @@ class VentanaPrincipal:
                         (
                             p
                             for p in personal
-                            if p.codigo_profesional == valor
+                            if (
+                                p.codigo_profesional
+                                == valor
+                            )
                         ),
                         None
                     )
@@ -4122,6 +5519,10 @@ class VentanaPrincipal:
                     raise ValueError(
                         "No se encontró el profesional."
                     )
+
+                texto.config(
+                    state="normal"
+                )
 
                 texto.delete(
                     "1.0",
@@ -4206,7 +5607,7 @@ class VentanaPrincipal:
                 )
 
                 # =================================================
-                # CITAS DEL PROFESIONAL
+                # CITAS
                 # =================================================
 
                 texto.insert(
@@ -4223,7 +5624,10 @@ class VentanaPrincipal:
 
                     texto.insert(
                         tk.END,
-                        "El profesional no tiene citas registradas.\n\n"
+                        (
+                            "El profesional no tiene "
+                            "citas registradas.\n\n"
+                        )
                     )
 
                 else:
@@ -4277,7 +5681,7 @@ class VentanaPrincipal:
                 )
 
                 # =================================================
-                # ATENCIONES REALIZADAS
+                # ATENCIONES
                 # =================================================
 
                 texto.insert(
@@ -4294,7 +5698,10 @@ class VentanaPrincipal:
 
                     texto.insert(
                         tk.END,
-                        "El profesional no tiene atenciones registradas.\n"
+                        (
+                            "El profesional no tiene "
+                            "atenciones registradas.\n"
+                        )
                     )
 
                 else:
@@ -4356,6 +5763,10 @@ class VentanaPrincipal:
                             "--------------------------------------------------\n"
                         )
 
+                texto.config(
+                    state="disabled"
+                )
+
             except (
                 ValueError,
                 TypeError
@@ -4383,14 +5794,8 @@ class VentanaPrincipal:
 
     def ver_estadisticas(self):
 
-        ventana = self._crear_pantalla_interna()
-
-        ventana.title(
+        ventana = self._crear_pantalla_interna(
             "Estadísticas del sistema"
-        )
-
-        ventana.geometry(
-            "550x550"
         )
 
         tk.Label(
@@ -4482,14 +5887,8 @@ class VentanaPrincipal:
 
     def ver_reportes(self):
 
-        ventana = self._crear_pantalla_interna()
-
-        ventana.title(
+        ventana = self._crear_pantalla_interna(
             "Reportes del sistema"
-        )
-
-        ventana.geometry(
-            "850x650"
         )
 
         texto = tk.Text(
@@ -4522,6 +5921,10 @@ class VentanaPrincipal:
         reporte_general = (
             self.reportes.reporte_general()
         )
+
+        # =====================================================
+        # ENCABEZADO
+        # =====================================================
 
         texto.insert(
             tk.END,
@@ -4753,6 +6156,10 @@ class VentanaPrincipal:
                 tk.END,
                 f"- {diagnostico}\n"
             )
+
+        texto.config(
+            state="disabled"
+        )
 
 
 # =============================================================
