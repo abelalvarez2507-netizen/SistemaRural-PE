@@ -107,3 +107,15 @@ def normalizar_fecha(valor):
     raise ValueError(
         "La fecha debe tener el formato DD/MM/AAAA. Ejemplo: 15/09/2026."
     )
+
+
+def normalizar_hora(valor):
+    """Valida y normaliza una hora en formato de 24 horas HH:MM."""
+    hora = texto_requerido(valor, "La hora de la cita", 5)
+    try:
+        hora_objeto = datetime.strptime(hora, "%H:%M")
+    except ValueError as error:
+        raise ValueError(
+            "La hora debe tener el formato HH:MM, por ejemplo 09:30."
+        ) from error
+    return hora_objeto.strftime("%H:%M")

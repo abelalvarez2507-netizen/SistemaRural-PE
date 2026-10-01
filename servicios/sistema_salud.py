@@ -2,6 +2,7 @@ from modelos.paciente import Paciente
 from modelos.cita import Cita
 from modelos.personal_salud import PersonalSalud
 from modelos.atencion_medica import AtencionMedica
+from datetime import datetime, timedelta
 
 from servicios.repositorio import RepositorioSalud
 from servicios.fabrica import FabricaEntidades
@@ -45,6 +46,7 @@ class SistemaSalud:
         self._cargar_personal()
         self._cargar_citas()
         self._cargar_atenciones()
+        self.actualizar_citas_vencidas()
 
     # =========================================================
     # CARGAR PACIENTES
@@ -121,14 +123,27 @@ class SistemaSalud:
             .obtener_citas()
         )
 
-        for (
-            codigo,
-            paciente_codigo,
-            profesional_codigo,
-            fecha,
-            motivo,
-            estado
-        ) in datos:
+        for fila in datos:
+            if len(fila) == 6:
+                (
+                    codigo,
+                    paciente_codigo,
+                    profesional_codigo,
+                    fecha,
+                    motivo,
+                    estado,
+                ) = fila
+                hora = "09:00"
+            else:
+                (
+                    codigo,
+                    paciente_codigo,
+                    profesional_codigo,
+                    fecha,
+                    hora,
+                    motivo,
+                    estado,
+                ) = fila
 
             paciente = next(
                 (
@@ -171,7 +186,8 @@ class SistemaSalud:
                     profesional,
                     fecha,
                     motivo,
-                    estado
+                    estado,
+                    hora,
                 )
             )
 
@@ -435,6 +451,14 @@ class SistemaSalud:
                 "ya está ocupado."
             )
 
+        self._validar_fecha_hora_futura(cita.fecha_hora)
+        self._validar_disponibilidad(
+            cita.profesional.codigo_profesional,
+            cita.fecha,
+            cita.hora,
+            paciente_codigo=cita.paciente.codigo,
+        )
+
         self._repositorio.guardar_cita(
             cita
         )
@@ -442,6 +466,126 @@ class SistemaSalud:
         self._citas.append(
             cita
         )
+
+    HORARIOS_ATENCION = tuple(
+        (datetime.strptime("08:00", "%H:%M") + timedelta(minutes=30 * paso))
+        .strftime("%H:%M")
+        for paso in range(19)
+    )
+
+    def _validar_fecha_hora_futura(self, fecha_hora):
+        if fecha_hora <= datetime.now():
+            raise ValueError(
+                "La cita debe ser posterior a la fecha y hora actuales."
+            )
+
+    def _validar_disponibilidad(
+        self,
+        profesional_codigo,
+        fecha,
+        hora,
+        paciente_codigo=None,
+        excluir_codigo=None,
+    ):
+        for cita in self._citas:
+            if cita.codigo == excluir_codigo:
+                continue
+            if cita.estado not in {"Pendiente", "Reprogramada"}:
+                continue
+            if cita.fecha != fecha or cita.hora != hora:
+                continue
+            if cita.profesional.codigo_profesional == profesional_codigo:
+                raise ValueError(
+                    "Ese horario ya está reservado para el profesional. "
+                    "Elige otro horario disponible."
+                )
+            if paciente_codigo and cita.paciente.codigo == paciente_codigo:
+                raise ValueError(
+                    "El paciente ya tiene una cita en ese horario."
+                )
+
+    def horarios_disponibles(
+        self,
+        profesional_codigo,
+        fecha,
+        excluir_codigo=None,
+    ):
+        from servicios.validaciones import normalizar_fecha
+
+        fecha_normalizada = normalizar_fecha(fecha)
+        fecha_base = datetime.strptime(fecha_normalizada, "%d/%m/%Y").date()
+        ahora = datetime.now()
+        if fecha_base < ahora.date():
+            return []
+
+        ocupados = {
+            cita.hora
+            for cita in self._citas
+            if cita.codigo != excluir_codigo
+            and cita.estado in {"Pendiente", "Reprogramada"}
+            and cita.fecha == fecha_normalizada
+            and cita.profesional.codigo_profesional == profesional_codigo
+        }
+        disponibles = []
+        for hora in self.HORARIOS_ATENCION:
+            momento = datetime.strptime(
+                f"{fecha_normalizada} {hora}",
+                "%d/%m/%Y %H:%M",
+            )
+            if hora not in ocupados and momento > ahora:
+                disponibles.append(hora)
+        return disponibles
+
+    def reprogramar_cita(self, codigo_cita, fecha, hora):
+        cita = next(
+            (item for item in self._citas if item.codigo == codigo_cita),
+            None,
+        )
+        if cita is None:
+            raise ValueError("No se encontró la cita.")
+        if cita.estado in {"Atendida", "No atendida", "Cancelada"}:
+            raise ValueError("Esta cita ya no se puede reprogramar.")
+
+        from servicios.validaciones import normalizar_fecha, normalizar_hora
+
+        fecha_nueva = normalizar_fecha(fecha)
+        hora_nueva = normalizar_hora(hora)
+        momento = datetime.strptime(
+            f"{fecha_nueva} {hora_nueva}",
+            "%d/%m/%Y %H:%M",
+        )
+        self._validar_fecha_hora_futura(momento)
+        self._validar_disponibilidad(
+            cita.profesional.codigo_profesional,
+            fecha_nueva,
+            hora_nueva,
+            paciente_codigo=cita.paciente.codigo,
+            excluir_codigo=cita.codigo,
+        )
+        self._repositorio.actualizar_agenda_cita(
+            cita.codigo,
+            fecha_nueva,
+            hora_nueva,
+            "Reprogramada",
+        )
+        cita.fecha = fecha_nueva
+        cita.hora = hora_nueva
+        cita.estado = "Reprogramada"
+
+    def cancelar_cita(self, codigo_cita):
+        self.actualizar_estado_cita(codigo_cita, "Cancelada")
+
+    def actualizar_citas_vencidas(self):
+        ahora = datetime.now()
+        vencidas = [
+            cita
+            for cita in self._citas
+            if cita.estado in {"Pendiente", "Reprogramada"}
+            and cita.fecha_hora <= ahora
+        ]
+        for cita in vencidas:
+            self.actualizar_estado_cita(cita.codigo, "Cancelada")
+        return len(vencidas)
 
     # =========================================================
     # REGISTRAR ATENCIÓN
@@ -508,6 +652,24 @@ class SistemaSalud:
             atencion
         )
 
+        # Al guardar una opinión clínica, la atención y la cita quedan cerradas.
+        self.actualizar_estado_cita(cita.codigo, "Atendida")
+
+    def actualizar_atencion(self, codigo_atencion, diagnostico):
+        atencion = next(
+            (item for item in self._atenciones if item.codigo == codigo_atencion),
+            None,
+        )
+        if atencion is None:
+            raise ValueError("No se encontró la atención médica.")
+        atencion.diagnostico = diagnostico
+        self._repositorio.actualizar_diagnostico_atencion(
+            codigo_atencion,
+            atencion.diagnostico,
+        )
+        self.actualizar_estado_atencion(codigo_atencion, "Finalizada")
+        self.actualizar_estado_cita(atencion.cita.codigo, "Atendida")
+
     # =========================================================
     # ESTADOS DE CITAS
     # =========================================================
@@ -521,7 +683,7 @@ class SistemaSalud:
         if nuevo_estado not in Cita.ESTADOS_VALIDOS:
             raise ValueError(
                 "Estado inválido. Use: "
-                "Pendiente, Atendida o Reprogramar."
+                "Pendiente, Atendida, Reprogramada, No atendida o Cancelada."
             )
 
         cita = next(
@@ -632,7 +794,7 @@ class SistemaSalud:
         return list(
             filter(
                 lambda cita:
-                    cita.estado == "Reprogramar",
+                    cita.estado == "Reprogramada",
                 self._citas
             )
         )

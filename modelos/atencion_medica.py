@@ -40,6 +40,10 @@ class AtencionMedica:
     def diagnostico(self):
         return self._diagnostico
 
+    @diagnostico.setter
+    def diagnostico(self, valor):
+        self._diagnostico = validar_diagnostico(valor)
+
     @property
     def estado(self):
         return self._estado
@@ -58,7 +62,7 @@ class AtencionMedica:
             f"Cita: {self.cita.codigo} | "
             f"Paciente: {self.paciente.nombre} | "
             f"Profesional: {self.profesional.nombre} | "
-            f"Fecha: {self.fecha} | "
+            f"Fecha: {self.fecha} | Hora: {self.cita.hora} | "
             f"Diagnóstico: {self.diagnostico} | "
             f"Estado: {self.estado}"
         )

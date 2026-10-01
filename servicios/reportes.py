@@ -90,16 +90,25 @@ class Reportes:
         reprogramadas = list(
             filter(
                 lambda cita:
-                    cita.estado == "Reprogramar",
+                    cita.estado == "Reprogramada",
                 citas
             )
+        )
+
+        no_atendidas = list(
+            filter(lambda cita: cita.estado == "No atendida", citas)
+        )
+        canceladas = list(
+            filter(lambda cita: cita.estado == "Cancelada", citas)
         )
 
         return {
             "total_citas": len(citas),
             "pendientes": len(pendientes),
             "atendidas": len(atendidas),
-            "reprogramadas": len(reprogramadas)
+            "reprogramadas": len(reprogramadas),
+            "no_atendidas": len(no_atendidas),
+            "canceladas": len(canceladas),
         }
 
     # ==========================================

@@ -13,6 +13,7 @@ from interfaz.estilos import (
     FUENTE_SUBTITULO,
     FUENTE_BOTON_GRANDE
 )
+from interfaz.navegacion import VistaDesplazable, instalar_navegacion
 
 
 class PantallaInicio:
@@ -95,19 +96,22 @@ class PantallaInicio:
 
     def crear_interfaz(self):
 
+        instalar_navegacion(
+            self.ventana,
+            volver=lambda: None,
+            inicio=self.mostrar,
+        )
+
         # =====================================================
         # CONTENEDOR PRINCIPAL
         # =====================================================
 
-        contenedor = tk.Frame(
+        vista = VistaDesplazable(
             self.ventana,
-            bg=COLOR_FONDO
+            COLOR_FONDO,
         )
-
-        contenedor.pack(
-            fill="both",
-            expand=True
-        )
+        vista.pack(fill="both", expand=True)
+        contenedor = vista.contenido
 
         # =====================================================
         # LOGO / NOMBRE SALUPRO
@@ -206,6 +210,7 @@ class PantallaInicio:
             bd=0,
 
             cursor="hand2",
+            takefocus=True,
 
             command=self.abrir_paciente
         )
@@ -238,6 +243,7 @@ class PantallaInicio:
             bd=0,
 
             cursor="hand2",
+            takefocus=True,
 
             command=self.abrir_administrativa
         )
@@ -247,6 +253,44 @@ class PantallaInicio:
             column=1,
             padx=15,
             pady=10
+        )
+
+        # =====================================================
+        # BOTÓN PROFESIONAL
+        # =====================================================
+
+        boton_profesional = tk.Button(
+            panel_botones,
+            text="PROFESIONAL",
+            font=FUENTE_BOTON_GRANDE,
+            width=20,
+            height=3,
+            bg=COLOR_PANEL,
+            fg=COLOR_BLANCO,
+            activebackground=COLOR_ROJO,
+            activeforeground=COLOR_BLANCO,
+            relief="flat",
+            bd=0,
+            cursor="hand2",
+            takefocus=True,
+            command=self.abrir_profesional
+        )
+
+        boton_profesional.grid(
+            row=1,
+            column=0,
+            columnspan=2,
+            padx=15,
+            pady=10
+        )
+
+        boton_profesional.bind(
+            "<Enter>",
+            lambda evento: boton_profesional.configure(bg=COLOR_ROJO)
+        )
+        boton_profesional.bind(
+            "<Leave>",
+            lambda evento: boton_profesional.configure(bg=COLOR_PANEL)
         )
 
         # =====================================================
@@ -451,12 +495,24 @@ class PantallaInicio:
 
         # Reemplaza el contenido de la misma ventana raíz.
         # No se crea una segunda ventana administrativa.
-        from interfaz.ventana_principal import VentanaPrincipal
+        from interfaz.pantalla_administrativa import PantallaAdministrativa
 
         for widget in self.ventana.winfo_children():
             widget.destroy()
 
-        VentanaPrincipal(
+        PantallaAdministrativa(
             self.ventana,
             pantalla_inicio=self
+        )
+
+    def abrir_profesional(self):
+        """Abre el portal privado del profesional de salud."""
+        from interfaz.pantalla_profesional import PantallaProfesional
+
+        for widget in self.ventana.winfo_children():
+            widget.destroy()
+
+        PantallaProfesional(
+            self.ventana,
+            self,
         )

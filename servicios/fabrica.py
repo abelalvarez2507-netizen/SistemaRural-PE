@@ -81,7 +81,8 @@ class FabricaEntidades:
         profesional,
         fecha,
         motivo,
-        estado="Pendiente"
+        estado="Pendiente",
+        hora="09:00",
     ):
         return Cita(
             codigo,
@@ -89,7 +90,8 @@ class FabricaEntidades:
             profesional,
             fecha,
             motivo,
-            estado
+            estado,
+            hora,
         )
 
     @staticmethod

@@ -69,6 +69,7 @@ class RepositorioSalud:
                 paciente_codigo TEXT NOT NULL,
                 profesional_codigo TEXT NOT NULL,
                 fecha TEXT NOT NULL,
+                hora TEXT NOT NULL DEFAULT '09:00',
                 motivo TEXT NOT NULL,
                 estado TEXT NOT NULL
             )
@@ -170,6 +171,18 @@ class RepositorioSalud:
                 ALTER TABLE personal
                 ADD COLUMN dni_salt TEXT
                 """
+            )
+
+        columnas_citas = [
+            fila[1]
+            for fila in cursor.execute(
+                "PRAGMA table_info(citas)"
+            ).fetchall()
+        ]
+
+        if "hora" not in columnas_citas:
+            cursor.execute(
+                "ALTER TABLE citas ADD COLUMN hora TEXT NOT NULL DEFAULT '09:00'"
             )
 
         # -----------------------------------------------------
@@ -288,16 +301,8 @@ class RepositorioSalud:
         cursor.execute(
             """
             UPDATE citas
-            SET estado = 'Reprogramar'
-            WHERE estado = 'Reprogramada'
-            """
-        )
-
-        cursor.execute(
-            """
-            UPDATE citas
-            SET estado = 'Pendiente'
-            WHERE estado = 'Cancelada'
+            SET estado = 'Reprogramada'
+            WHERE estado IN ('Reprogramar', 'Reprogramada')
             """
         )
 
@@ -499,16 +504,18 @@ class RepositorioSalud:
                         paciente_codigo,
                         profesional_codigo,
                         fecha,
+                        hora,
                         motivo,
                         estado
                     )
-                    VALUES (?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         cita.codigo,
                         cita.paciente.codigo,
                         cita.profesional.codigo_profesional,
                         cita.fecha,
+                        cita.hora,
                         cita.motivo,
                         cita.estado
                     )
@@ -531,6 +538,7 @@ class RepositorioSalud:
                 paciente_codigo,
                 profesional_codigo,
                 fecha,
+                hora,
                 motivo,
                 estado
             FROM citas
@@ -556,6 +564,19 @@ class RepositorioSalud:
                     nuevo_estado,
                     codigo_cita
                 )
+            )
+
+    def actualizar_agenda_cita(
+        self,
+        codigo_cita,
+        fecha,
+        hora,
+        estado,
+    ):
+        with self._conexion:
+            self._conexion.execute(
+                "UPDATE citas SET fecha = ?, hora = ?, estado = ? WHERE codigo = ?",
+                (fecha, hora, estado, codigo_cita),
             )
 
     # =========================================================
@@ -630,6 +651,13 @@ class RepositorioSalud:
                     nuevo_estado,
                     codigo_atencion
                 )
+            )
+
+    def actualizar_diagnostico_atencion(self, codigo_atencion, diagnostico):
+        with self._conexion:
+            self._conexion.execute(
+                "UPDATE atenciones SET diagnostico = ? WHERE codigo = ?",
+                (diagnostico, codigo_atencion),
             )
 
     # =========================================================

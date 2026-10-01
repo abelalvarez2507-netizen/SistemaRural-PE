@@ -48,11 +48,17 @@ class RepositorioSaludProtocol(Protocol):
     ):
         ...
 
+    def actualizar_agenda_cita(self, codigo_cita, fecha, hora, estado):
+        ...
+
     def actualizar_estado_atencion(
         self,
         codigo_atencion,
         nuevo_estado
     ):
+        ...
+
+    def actualizar_diagnostico_atencion(self, codigo_atencion, diagnostico):
         ...
 
     def cerrar(self):

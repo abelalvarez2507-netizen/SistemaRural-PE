@@ -1,7 +1,10 @@
 import tkinter as tk
 from tkinter import messagebox
+from datetime import datetime
 
+from modelos.cita import Cita
 from servicios.sistema_salud import SistemaSalud
+from servicios.validaciones import normalizar_fecha
 from servicios.validaciones import validar_dni as validar_dni_valor
 
 from interfaz.estilos import (
@@ -19,6 +22,7 @@ from interfaz.estilos import (
     FUENTE_SECCION,
     FUENTE_BOTON
 )
+from interfaz.navegacion import VistaDesplazable, instalar_navegacion
 
 
 class PantallaPaciente:
@@ -40,6 +44,8 @@ class PantallaPaciente:
 
         # Pantalla actualmente mostrada dentro de la misma ventana.
         self.pantalla_actual = None
+        self._pantalla_titulo = "Inicio"
+        self._temporizador = None
 
         # =====================================================
         # CONFIGURACIÓN
@@ -78,6 +84,22 @@ class PantallaPaciente:
         )
 
         self.crear_interfaz()
+        self._temporizador = self.ventana.after(
+            60000,
+            self._revisar_citas_vencidas,
+        )
+
+    def _revisar_citas_vencidas(self):
+        try:
+            vencidas = self.sistema.actualizar_citas_vencidas()
+            if vencidas and self._pantalla_titulo == "Mis citas" and self.paciente_actual:
+                self.mostrar_citas()
+            self._temporizador = self.ventana.after(
+                60000,
+                self._revisar_citas_vencidas,
+            )
+        except tk.TclError:
+            self._temporizador = None
 
     # =========================================================
     # INTERFAZ PRINCIPAL
@@ -86,18 +108,20 @@ class PantallaPaciente:
     def crear_interfaz(self):
 
         self._limpiar_contenido()
-
-        contenedor = tk.Frame(
+        self._pantalla_titulo = "Inicio"
+        instalar_navegacion(
             self.ventana,
-            bg=COLOR_FONDO
+            volver=self.volver_a_inicio,
+            inicio=self.volver_a_inicio,
         )
 
-        contenedor.pack(
-            fill="both",
-            expand=True
+        vista = VistaDesplazable(
+            self.ventana,
+            COLOR_FONDO,
         )
-
-        self.pantalla_actual = contenedor
+        vista.pack(fill="both", expand=True)
+        contenedor = vista.contenido
+        self.pantalla_actual = vista
 
         # =====================================================
         # BARRA SUPERIOR
@@ -217,8 +241,8 @@ class PantallaPaciente:
         tk.Label(
             panel_identificacion,
             text=(
-                "Seleccione DNI o Código para acceder "
-                "a su información."
+                "El sistema reconoce automáticamente el DNI o el código "
+                "por su formato."
             ),
             font=("Arial", 10),
             fg=COLOR_GRIS_CLARO,
@@ -238,7 +262,7 @@ class PantallaPaciente:
 
         self.etiqueta_busqueda = tk.Label(
             fila_dni,
-            text="Buscar por:",
+            text="Código o DNI:",
             font=FUENTE_BOTON,
             fg=COLOR_BLANCO,
             bg=COLOR_PANEL
@@ -250,37 +274,6 @@ class PantallaPaciente:
 
         self.tipo_busqueda = tk.StringVar(
             value="DNI"
-        )
-
-        selector_busqueda = tk.OptionMenu(
-            fila_dni,
-            self.tipo_busqueda,
-            "DNI",
-            "Código",
-            command=self._cambiar_tipo_busqueda
-        )
-
-        selector_busqueda.configure(
-            font=FUENTE_BOTON,
-            bg=COLOR_PANEL_CLARO,
-            fg=COLOR_BLANCO,
-            activebackground=COLOR_ROJO,
-            activeforeground=COLOR_BLANCO,
-            relief="flat",
-            bd=0,
-            cursor="hand2"
-        )
-
-        selector_busqueda["menu"].configure(
-            bg=COLOR_PANEL_CLARO,
-            fg=COLOR_BLANCO,
-            activebackground=COLOR_ROJO,
-            activeforeground=COLOR_BLANCO
-        )
-
-        selector_busqueda.pack(
-            side="left",
-            padx=5
         )
 
         self.campo_dni = tk.Entry(
@@ -426,6 +419,21 @@ class PantallaPaciente:
             pady=10
         )
 
+        tarjeta_reservar = self.crear_tarjeta(
+            panel_opciones,
+            "Solicitar una cita",
+            "Elige profesional, fecha y un horario libre.",
+            self.solicitar_cita
+        )
+
+        tarjeta_reservar.grid(
+            row=2,
+            column=0,
+            columnspan=2,
+            padx=15,
+            pady=10
+        )
+
         # =====================================================
         # INFORMACIÓN
         # =====================================================
@@ -467,17 +475,20 @@ class PantallaPaciente:
         """
         self._limpiar_contenido()
 
-        pantalla = tk.Frame(
+        vista = VistaDesplazable(
             self.ventana,
-            bg=COLOR_FONDO
+            COLOR_FONDO,
         )
+        vista.pack(fill="both", expand=True)
+        pantalla = vista.contenido
 
-        pantalla.pack(
-            fill="both",
-            expand=True
+        self.pantalla_actual = vista
+        self._pantalla_titulo = titulo
+        instalar_navegacion(
+            self.ventana,
+            volver=self.crear_interfaz,
+            inicio=self.volver_a_inicio,
         )
-
-        self.pantalla_actual = pantalla
 
         barra = tk.Frame(
             pantalla,
@@ -570,18 +581,12 @@ class PantallaPaciente:
     def _validar_busqueda_tecla(self, nuevo_valor):
         if nuevo_valor == "":
             return True
-
-        tipo = self.tipo_busqueda.get()
-
-        if tipo == "DNI":
-            return (
-                nuevo_valor.isdigit()
-                and len(nuevo_valor) <= 8
-            )
-
         return (
-            nuevo_valor.isalnum()
-            and len(nuevo_valor) <= 4
+            len(nuevo_valor) <= 10
+            and all(
+                caracter.isalnum() or caracter in "-_"
+                for caracter in nuevo_valor
+            )
         )
 
     def _validar_dni_tecla(self, nuevo_valor):
@@ -701,18 +706,21 @@ class PantallaPaciente:
     def autenticar_paciente(self):
 
         valor = self.campo_dni.get().strip()
-        tipo = self.tipo_busqueda.get()
 
         if not valor:
 
             messagebox.showwarning(
                 "Dato requerido",
-                f"Ingresa tu {tipo.lower()}."
+                "Ingresa tu código o DNI."
             )
 
             return
 
-        if tipo == "DNI":
+        es_dni = valor.isdigit() and len(valor) == 8
+        tipo = "DNI" if es_dni else "Código"
+        self.tipo_busqueda.set(tipo)
+
+        if es_dni:
             try:
                 valor = validar_dni_valor(valor)
             except ValueError as error:
@@ -720,19 +728,19 @@ class PantallaPaciente:
                 return
         else:
             if (
-                not valor.isalnum()
-                or len(valor) != 4
+                not self._validar_busqueda_tecla(valor)
+                or len(valor) < 2
             ):
 
                 messagebox.showerror(
                     "Código inválido",
-                    "El código debe contener exactamente 4 caracteres "
-                    "entre letras y números."
+                    "El código debe tener entre 2 y 10 letras, números, "
+                    "guiones o guiones bajos."
                 )
 
                 return
 
-        if tipo == "DNI":
+        if es_dni:
             pacientes = (
                 self.sistema
                 .buscar_paciente_por_dni(valor)
@@ -795,7 +803,7 @@ class PantallaPaciente:
 
             messagebox.showwarning(
                 "Acceso requerido",
-                "Primero debes ingresar tu DNI "
+                "Primero debes ingresar tu código o DNI "
                 "para consultar esta información."
             )
 
@@ -811,6 +819,13 @@ class PantallaPaciente:
 
     def volver_a_inicio(self):
 
+        if self._temporizador:
+            try:
+                self.ventana.after_cancel(self._temporizador)
+            except tk.TclError:
+                pass
+            self._temporizador = None
+
         try:
             if self.sistema is not None:
                 self.sistema.cerrar()
@@ -825,6 +840,271 @@ class PantallaPaciente:
             pass
 
     # =========================================================
+    # SOLICITAR CITA
+    # =========================================================
+
+    def solicitar_cita(self):
+        if not self.paciente_autenticado():
+            return
+
+        profesionales = self.sistema.obtener_personal()
+        if not profesionales:
+            messagebox.showwarning(
+                "Sin profesionales",
+                "Todavía no hay profesionales registrados para reservar una cita.",
+            )
+            return
+
+        pantalla = self._crear_pantalla_interna("Solicitar una cita")
+        tk.Label(
+            pantalla,
+            text=f"Paciente: {self.paciente_actual.nombre}",
+            font=FUENTE_SUBTITULO,
+            fg=COLOR_GRIS_CLARO,
+            bg=COLOR_FONDO,
+        ).pack(pady=(0, 12))
+
+        formulario = tk.Frame(pantalla, bg=COLOR_PANEL, padx=24, pady=18)
+        formulario.pack(fill="x", padx=60, pady=10)
+
+        tk.Label(formulario, text="Profesional:", bg=COLOR_PANEL, fg=COLOR_BLANCO).pack(anchor="w")
+        profesional_var = tk.StringVar()
+        opciones_profesionales = [
+            f"{profesional.codigo_profesional} · {profesional.nombre} · {profesional.especialidad}"
+            for profesional in profesionales
+        ]
+        profesional_var.set(opciones_profesionales[0])
+        menu_profesional = tk.OptionMenu(
+            formulario,
+            profesional_var,
+            *opciones_profesionales,
+        )
+        menu_profesional.configure(bg=COLOR_PANEL_CLARO, fg=COLOR_BLANCO, relief="flat")
+        menu_profesional.pack(anchor="w", pady=(4, 12))
+
+        tk.Label(formulario, text="Fecha (DD/MM/AAAA):", bg=COLOR_PANEL, fg=COLOR_BLANCO).pack(anchor="w")
+
+        def validar_fecha_en_campo(valor):
+            return (
+                len(valor) <= 10
+                and sum(caracter.isdigit() for caracter in valor) <= 8
+                and all(caracter.isdigit() or caracter == "/" for caracter in valor)
+            )
+
+        validar_fecha = formulario.register(validar_fecha_en_campo)
+        entrada_fecha = tk.Entry(
+            formulario,
+            width=20,
+            justify="center",
+            bg=COLOR_PANEL_CLARO,
+            fg=COLOR_GRIS,
+            insertbackground=COLOR_BLANCO,
+            relief="flat",
+            validate="key",
+            validatecommand=(validar_fecha, "%P"),
+        )
+        entrada_fecha.pack(anchor="w", pady=(4, 12), ipady=6)
+        entrada_fecha.configure(validate="none")
+        entrada_fecha.insert(0, "dd/mm/AAAA")
+        entrada_fecha.placeholder_activo = True
+        entrada_fecha.configure(validate="key")
+
+        def enfocar_fecha(_evento=None):
+            if entrada_fecha.placeholder_activo:
+                entrada_fecha.delete(0, tk.END)
+                entrada_fecha.configure(fg=COLOR_BLANCO)
+                entrada_fecha.placeholder_activo = False
+
+        def desenfocar_fecha(_evento=None):
+            if not entrada_fecha.get():
+                entrada_fecha.configure(validate="none", fg=COLOR_GRIS)
+                entrada_fecha.insert(0, "dd/mm/AAAA")
+                entrada_fecha.configure(validate="key")
+                entrada_fecha.placeholder_activo = True
+
+        def formatear_fecha(_evento=None):
+            if entrada_fecha.placeholder_activo:
+                return
+
+            contenido = entrada_fecha.get()
+            posicion = entrada_fecha.index(tk.INSERT)
+            digitos_antes = sum(
+                caracter.isdigit() for caracter in contenido[:posicion]
+            )
+            digitos = "".join(
+                caracter for caracter in contenido if caracter.isdigit()
+            )[:8]
+
+            if len(digitos) > 4:
+                formateada = f"{digitos[:2]}/{digitos[2:4]}/{digitos[4:]}"
+            elif len(digitos) > 2:
+                formateada = f"{digitos[:2]}/{digitos[2:]}"
+            else:
+                formateada = digitos
+
+            if formateada != contenido:
+                entrada_fecha.configure(validate="none")
+                entrada_fecha.delete(0, tk.END)
+                entrada_fecha.insert(0, formateada)
+                nueva_posicion = digitos_antes
+                if digitos_antes > 2:
+                    nueva_posicion += 1
+                if digitos_antes > 4:
+                    nueva_posicion += 1
+                entrada_fecha.icursor(min(nueva_posicion, len(formateada)))
+                entrada_fecha.configure(validate="key")
+
+        def permitir_solo_digitos(evento):
+            if evento.keysym in (
+                "BackSpace",
+                "Delete",
+                "Left",
+                "Right",
+                "Home",
+                "End",
+                "Tab",
+                "Return",
+                "KP_Enter",
+            ) or evento.state & 0x4:
+                return None
+            if evento.char and not evento.char.isdigit():
+                return "break"
+            return None
+
+        entrada_fecha.bind("<FocusIn>", enfocar_fecha)
+        entrada_fecha.bind("<FocusOut>", desenfocar_fecha, add="+")
+        entrada_fecha.bind("<KeyPress>", permitir_solo_digitos, add="+")
+        entrada_fecha.bind("<KeyRelease>", formatear_fecha, add="+")
+        entrada_fecha.bind(
+            "<<Paste>>",
+            lambda _evento: entrada_fecha.after_idle(formatear_fecha),
+            add="+",
+        )
+
+        tk.Label(
+            formulario,
+            text="Horarios disponibles (turnos de 30 minutos):",
+            font=FUENTE_BOTON,
+            bg=COLOR_PANEL,
+            fg=COLOR_BLANCO,
+        ).pack(anchor="w")
+        tk.Label(
+            formulario,
+            text="Atención de 08:00 a 17:00. La cita debe ser futura.",
+            font=("Arial", 9),
+            bg=COLOR_PANEL,
+            fg=COLOR_GRIS,
+        ).pack(anchor="w", pady=(2, 6))
+
+        hora_var = tk.StringVar(value="")
+        menu_hora = tk.OptionMenu(formulario, hora_var, "")
+        menu_hora.configure(bg=COLOR_PANEL_CLARO, fg=COLOR_BLANCO, relief="flat")
+        menu_hora.pack(anchor="w", pady=(0, 12))
+
+        def seleccionado():
+            codigo = profesional_var.get().split(" · ", 1)[0]
+            return next(
+                profesional
+                for profesional in profesionales
+                if profesional.codigo_profesional == codigo
+            )
+
+        def actualizar_horarios(event=None):
+            try:
+                fecha = normalizar_fecha(entrada_fecha.get())
+                profesional = seleccionado()
+                horarios = self.sistema.horarios_disponibles(
+                    profesional.codigo_profesional,
+                    fecha,
+                )
+            except (ValueError, StopIteration):
+                horarios = []
+            menu = menu_hora["menu"]
+            menu.delete(0, "end")
+            if horarios:
+                for hora in horarios:
+                    menu.add_command(
+                        label=hora,
+                        command=lambda valor=hora: hora_var.set(valor),
+                    )
+                hora_var.set(horarios[0])
+            else:
+                menu.add_command(
+                    label="Primero ingresa una fecha futura",
+                    command=lambda: None,
+                )
+                hora_var.set("")
+
+        self._boton_cita = tk.Button(
+            formulario,
+            text="Ver horarios disponibles",
+            command=actualizar_horarios,
+            font=FUENTE_BOTON,
+            bg=COLOR_ROJO,
+            fg=COLOR_BLANCO,
+            activebackground=COLOR_ROJO_CLARO,
+            relief="flat",
+            cursor="hand2",
+            padx=12,
+            pady=6,
+        )
+        self._boton_cita.pack(anchor="w", pady=(0, 12))
+        entrada_fecha.bind("<FocusOut>", actualizar_horarios, add="+")
+        entrada_fecha.bind("<Return>", actualizar_horarios)
+        profesional_var.trace_add("write", lambda *_args: actualizar_horarios())
+
+        tk.Label(formulario, text="Motivo de la cita:", bg=COLOR_PANEL, fg=COLOR_BLANCO).pack(anchor="w")
+        entrada_motivo = tk.Entry(
+            formulario,
+            width=55,
+            bg=COLOR_PANEL_CLARO,
+            fg=COLOR_BLANCO,
+            insertbackground=COLOR_BLANCO,
+            relief="flat",
+        )
+        entrada_motivo.pack(anchor="w", pady=(4, 8), ipady=6)
+
+        def guardar():
+            try:
+                profesional = seleccionado()
+                if entrada_fecha.placeholder_activo:
+                    raise ValueError("Ingresa la fecha con el formato dd/mm/AAAA.")
+                fecha = normalizar_fecha(entrada_fecha.get())
+                if not hora_var.get():
+                    raise ValueError("Selecciona un horario disponible.")
+                cita = Cita(
+                    self.sistema.generar_codigo_cita(),
+                    self.paciente_actual,
+                    profesional,
+                    fecha,
+                    entrada_motivo.get(),
+                    "Pendiente",
+                    hora_var.get(),
+                )
+                self.sistema.registrar_cita(cita)
+                messagebox.showinfo(
+                    "Cita solicitada",
+                    f"Tu cita quedó registrada para el {cita.fecha} a las {cita.hora}.",
+                )
+                self.crear_interfaz()
+            except (ValueError, StopIteration) as error:
+                messagebox.showerror("No se pudo registrar la cita", str(error))
+
+        tk.Button(
+            formulario,
+            text="Confirmar cita",
+            command=guardar,
+            font=FUENTE_BOTON,
+            bg=COLOR_ROJO,
+            fg=COLOR_BLANCO,
+            activebackground=COLOR_ROJO_CLARO,
+            relief="flat",
+            cursor="hand2",
+            padx=16,
+            pady=8,
+        ).pack(anchor="w", pady=(8, 0))
+
+    # =========================================================
     # MIS CITAS
     # =========================================================
 
@@ -833,6 +1113,7 @@ class PantallaPaciente:
         if not self.paciente_autenticado():
             return
 
+        self.sistema.actualizar_citas_vencidas()
         paciente = self.paciente_actual
 
         citas = list(
@@ -846,7 +1127,7 @@ class PantallaPaciente:
 
         citas = sorted(
             citas,
-            key=lambda cita: str(cita.fecha)
+            key=lambda cita: cita.fecha_hora
         )
 
         ventana = self._crear_pantalla_interna(
@@ -916,7 +1197,7 @@ class PantallaPaciente:
 
                 texto.insert(
                     tk.END,
-                    f"Fecha: {cita.fecha}\n"
+                    f"Fecha y hora: {cita.fecha} · {cita.hora}\n"
                 )
 
                 texto.insert(
@@ -1054,7 +1335,7 @@ class PantallaPaciente:
 
                 texto.insert(
                     tk.END,
-                    f"Fecha: {cita.fecha}\n"
+                    f"Fecha y hora: {cita.fecha} · {cita.hora}\n"
                 )
 
                 texto.insert(
