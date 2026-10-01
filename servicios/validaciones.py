@@ -1,6 +1,7 @@
 """Validaciones y normalizaciones compartidas del dominio SaluPro."""
 
 import re
+import unicodedata
 from datetime import datetime
 
 
@@ -26,19 +27,36 @@ def texto_requerido(valor, campo, maximo=200):
 
 
 def validar_nombre(valor):
-    """Valida un nombre humano sin aceptar números."""
-    nombre = texto_requerido(valor, "El nombre", 100)
+    """Valida nombres formados únicamente por letras y espacios."""
+    nombre = unicodedata.normalize(
+        "NFC",
+        texto_requerido(valor, "El nombre", 100),
+    )
 
-    if not any(caracter.isalpha() for caracter in nombre):
-        raise ValueError("El nombre debe contener letras.")
-
-    permitidos = set(" .-'ÁÉÍÓÚÜÑáéíóúüñ")
-    if not all(caracter.isalpha() or caracter in permitidos for caracter in nombre):
+    if not all(caracter.isalpha() or caracter == " " for caracter in nombre):
         raise ValueError(
-            "El nombre solo puede contener letras, espacios, apóstrofes, puntos o guiones."
+            "El nombre solo puede contener letras, tildes, ñ y espacios."
         )
 
     return nombre
+
+
+def validar_nombre_en_edicion(valor):
+    """Permite escribir nombres con letras, espacios y tildes en curso."""
+    marcas_tilde = {"\u0300", "\u0301", "\u0303", "\u0308"}
+    anterior_es_letra = False
+
+    for caracter in valor:
+        if caracter.isalpha():
+            anterior_es_letra = True
+        elif caracter == " ":
+            anterior_es_letra = False
+        elif caracter in marcas_tilde and anterior_es_letra:
+            continue
+        else:
+            return False
+
+    return True
 
 
 def validar_edad(valor):

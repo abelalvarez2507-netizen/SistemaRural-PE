@@ -652,7 +652,8 @@ class SistemaSalud:
             atencion
         )
 
-        # Al guardar una opinión clínica, la atención y la cita quedan cerradas.
+        # La visita marca la cita como Atendida; el avance clínico conserva
+        # su propio estado (Pendiente, En proceso o Finalizada).
         self.actualizar_estado_cita(cita.codigo, "Atendida")
 
     def actualizar_atencion(self, codigo_atencion, diagnostico):

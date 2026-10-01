@@ -6,22 +6,23 @@ from tkinter import ttk
 # COLORES PRINCIPALES DE SALUPRO
 # =========================================================
 
-COLOR_FONDO = "#0B1117"
-COLOR_FONDO_SECUNDARIO = "#111A22"
+COLOR_FONDO = "#F6F7F9"
+COLOR_FONDO_SECUNDARIO = "#ECEFF2"
 
-COLOR_PANEL = "#151F28"
-COLOR_PANEL_CLARO = "#1C2933"
+COLOR_PANEL = "#FFFFFF"
+COLOR_PANEL_CLARO = "#F0F2F4"
 
-COLOR_ROJO = "#E3262E"
-COLOR_ROJO_CLARO = "#FF4B52"
-COLOR_ROJO_OSCURO = "#A9161D"
+COLOR_ROJO = "#C62828"
+COLOR_ROJO_CLARO = "#D32F2F"
+COLOR_ROJO_OSCURO = "#8E1B1B"
 
-COLOR_NEGRO = "#05080B"
+COLOR_NEGRO = "#17191C"
 
 COLOR_BLANCO = "#FFFFFF"
-COLOR_GRIS_CLARO = "#E5E7EB"
-COLOR_GRIS = "#AAB4BE"
-COLOR_GRIS_OSCURO = "#68737D"
+COLOR_TEXTO = "#17191C"
+COLOR_GRIS_CLARO = "#434A53"
+COLOR_GRIS = "#626B75"
+COLOR_GRIS_OSCURO = "#89919A"
 
 COLOR_VERDE = "#20C77A"
 COLOR_AMARILLO = "#F5B942"
@@ -138,7 +139,7 @@ def configurar_estilos():
     estilo.configure(
         "SaluPro.TLabel",
         background=COLOR_FONDO,
-        foreground=COLOR_BLANCO,
+        foreground=COLOR_TEXTO,
         font=FUENTE_NORMAL
     )
 
@@ -149,7 +150,7 @@ def configurar_estilos():
     estilo.configure(
         "SaluPro.Titulo.TLabel",
         background=COLOR_FONDO,
-        foreground=COLOR_BLANCO,
+        foreground=COLOR_TEXTO,
         font=FUENTE_TITULO
     )
 
@@ -171,7 +172,7 @@ def configurar_estilos():
     estilo.configure(
         "SaluPro.Seccion.TLabel",
         background=COLOR_PANEL,
-        foreground=COLOR_BLANCO,
+        foreground=COLOR_TEXTO,
         font=FUENTE_SECCION
     )
 
@@ -183,8 +184,8 @@ def configurar_estilos():
         "SaluPro.TEntry",
         font=FUENTE_NORMAL,
         fieldbackground=COLOR_PANEL_CLARO,
-        foreground=COLOR_BLANCO,
-        insertcolor=COLOR_BLANCO,
+        foreground=COLOR_TEXTO,
+        insertcolor=COLOR_TEXTO,
         borderwidth=1,
         padding=8
     )
@@ -198,7 +199,7 @@ def configurar_estilos():
         font=FUENTE_NORMAL,
         fieldbackground=COLOR_PANEL_CLARO,
         background=COLOR_PANEL_CLARO,
-        foreground=COLOR_BLANCO,
+        foreground=COLOR_TEXTO,
         borderwidth=1,
         padding=7
     )
@@ -342,7 +343,7 @@ def crear_boton_hover(
 
 def crear_panel(parent):
     """
-    Crea un panel oscuro reutilizable.
+    Crea un panel claro reutilizable.
     """
 
     panel = tk.Frame(
@@ -443,7 +444,7 @@ def crear_label(
         fondo = COLOR_FONDO
 
     if color is None:
-        color = COLOR_BLANCO
+        color = COLOR_TEXTO
 
     if fuente is None:
         fuente = FUENTE_NORMAL
@@ -477,9 +478,9 @@ def crear_entry(
         font=FUENTE_NORMAL,
 
         bg=COLOR_PANEL_CLARO,
-        fg=COLOR_BLANCO,
+        fg=COLOR_TEXTO,
 
-        insertbackground=COLOR_BLANCO,
+        insertbackground=COLOR_TEXTO,
 
         relief="flat",
         bd=1,
@@ -513,9 +514,9 @@ def crear_texto(
         font=FUENTE_NORMAL,
 
         bg=COLOR_PANEL_CLARO,
-        fg=COLOR_BLANCO,
+        fg=COLOR_TEXTO,
 
-        insertbackground=COLOR_BLANCO,
+        insertbackground=COLOR_TEXTO,
 
         relief="flat",
         bd=0,

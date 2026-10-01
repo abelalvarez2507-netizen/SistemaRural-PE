@@ -14,6 +14,7 @@ from interfaz.estilos import (
     COLOR_ROJO,
     COLOR_ROJO_CLARO,
     COLOR_BLANCO,
+    COLOR_TEXTO,
     COLOR_GRIS_CLARO,
     COLOR_GRIS,
     FUENTE_LOGO,
@@ -143,7 +144,7 @@ class PantallaPaciente:
             text="← Volver",
             font=FUENTE_BOTON,
             bg=COLOR_PANEL,
-            fg=COLOR_BLANCO,
+            fg=COLOR_TEXTO,
             activebackground=COLOR_ROJO,
             activeforeground=COLOR_BLANCO,
             relief="flat",
@@ -162,7 +163,7 @@ class PantallaPaciente:
             barra_superior,
             text="SALUPRO",
             font=FUENTE_LOGO,
-            fg=COLOR_BLANCO,
+            fg=COLOR_TEXTO,
             bg=COLOR_FONDO
         )
 
@@ -190,7 +191,7 @@ class PantallaPaciente:
             contenedor,
             text="Portal del paciente",
             font=FUENTE_TITULO,
-            fg=COLOR_BLANCO,
+            fg=COLOR_TEXTO,
             bg=COLOR_FONDO
         )
 
@@ -232,7 +233,7 @@ class PantallaPaciente:
             panel_identificacion,
             text="Identificación del paciente",
             font=FUENTE_SECCION,
-            fg=COLOR_BLANCO,
+            fg=COLOR_TEXTO,
             bg=COLOR_PANEL
         ).pack(
             pady=(18, 8)
@@ -264,7 +265,7 @@ class PantallaPaciente:
             fila_dni,
             text="Código o DNI:",
             font=FUENTE_BOTON,
-            fg=COLOR_BLANCO,
+            fg=COLOR_TEXTO,
             bg=COLOR_PANEL
         )
         self.etiqueta_busqueda.pack(
@@ -281,8 +282,8 @@ class PantallaPaciente:
             width=18,
             font=("Arial", 12),
             bg=COLOR_PANEL_CLARO,
-            fg=COLOR_BLANCO,
-            insertbackground=COLOR_BLANCO,
+            fg=COLOR_TEXTO,
+            insertbackground=COLOR_TEXTO,
             relief="flat",
             bd=0,
             justify="center"
@@ -342,6 +343,16 @@ class PantallaPaciente:
             )
         )
 
+        tk.Label(
+            panel_identificacion,
+            text="Por seguridad, el DNI no se muestra por completo después de la autenticación.",
+            font=("Arial", 9),
+            fg=COLOR_GRIS,
+            bg=COLOR_PANEL,
+            justify="center",
+            wraplength=500,
+        ).pack(pady=(0, 12))
+
         self.campo_dni.bind(
             "<Return>",
             lambda evento: self.autenticar_paciente()
@@ -375,6 +386,8 @@ class PantallaPaciente:
         panel_opciones.pack(
             pady=5
         )
+        panel_opciones.columnconfigure(0, weight=1, uniform="opciones_paciente")
+        panel_opciones.columnconfigure(1, weight=1, uniform="opciones_paciente")
 
         tarjeta_citas = self.crear_tarjeta(
             panel_opciones,
@@ -414,7 +427,6 @@ class PantallaPaciente:
         tarjeta_datos.grid(
             row=1,
             column=0,
-            columnspan=2,
             padx=15,
             pady=10
         )
@@ -427,9 +439,8 @@ class PantallaPaciente:
         )
 
         tarjeta_reservar.grid(
-            row=2,
-            column=0,
-            columnspan=2,
+            row=1,
+            column=1,
             padx=15,
             pady=10
         )
@@ -437,22 +448,6 @@ class PantallaPaciente:
         # =====================================================
         # INFORMACIÓN
         # =====================================================
-
-        informacion = tk.Label(
-            contenedor,
-            text=(
-                "Por seguridad, el DNI no se muestra "
-                "completo después de la autenticación."
-            ),
-            font=("Arial", 9),
-            fg=COLOR_GRIS,
-            bg=COLOR_FONDO,
-            justify="center"
-        )
-
-        informacion.pack(
-            pady=(15, 0)
-        )
 
     # =========================================================
     # UTILIDADES DE NAVEGACIÓN
@@ -506,7 +501,7 @@ class PantallaPaciente:
             text="← Volver",
             font=FUENTE_BOTON,
             bg=COLOR_PANEL,
-            fg=COLOR_BLANCO,
+            fg=COLOR_TEXTO,
             activebackground=COLOR_ROJO,
             activeforeground=COLOR_BLANCO,
             relief="flat",
@@ -525,7 +520,7 @@ class PantallaPaciente:
             barra,
             text="SALUPRO",
             font=FUENTE_LOGO,
-            fg=COLOR_BLANCO,
+            fg=COLOR_TEXTO,
             bg=COLOR_FONDO
         ).pack(
             side="right"
@@ -545,7 +540,7 @@ class PantallaPaciente:
             pantalla,
             text=titulo,
             font=FUENTE_TITULO,
-            fg=COLOR_BLANCO,
+            fg=COLOR_TEXTO,
             bg=COLOR_FONDO
         ).pack(
             pady=(5, 5)
@@ -642,7 +637,7 @@ class PantallaPaciente:
             tarjeta,
             text=titulo,
             font=FUENTE_SECCION,
-            fg=COLOR_BLANCO,
+            fg=COLOR_TEXTO,
             bg=COLOR_PANEL
         )
 
@@ -780,7 +775,7 @@ class PantallaPaciente:
                 "Paciente identificado: "
                 f"{self.paciente_actual.nombre}"
             ),
-            fg=COLOR_BLANCO
+            fg=COLOR_TEXTO
         )
 
         self.campo_dni.delete(
@@ -867,7 +862,7 @@ class PantallaPaciente:
         formulario = tk.Frame(pantalla, bg=COLOR_PANEL, padx=24, pady=18)
         formulario.pack(fill="x", padx=60, pady=10)
 
-        tk.Label(formulario, text="Profesional:", bg=COLOR_PANEL, fg=COLOR_BLANCO).pack(anchor="w")
+        tk.Label(formulario, text="Profesional:", bg=COLOR_PANEL, fg=COLOR_TEXTO).pack(anchor="w")
         profesional_var = tk.StringVar()
         opciones_profesionales = [
             f"{profesional.codigo_profesional} · {profesional.nombre} · {profesional.especialidad}"
@@ -879,114 +874,27 @@ class PantallaPaciente:
             profesional_var,
             *opciones_profesionales,
         )
-        menu_profesional.configure(bg=COLOR_PANEL_CLARO, fg=COLOR_BLANCO, relief="flat")
+        menu_profesional.configure(bg=COLOR_PANEL_CLARO, fg=COLOR_TEXTO, relief="flat")
         menu_profesional.pack(anchor="w", pady=(4, 12))
 
-        tk.Label(formulario, text="Fecha (DD/MM/AAAA):", bg=COLOR_PANEL, fg=COLOR_BLANCO).pack(anchor="w")
-
-        def validar_fecha_en_campo(valor):
-            return (
-                len(valor) <= 10
-                and sum(caracter.isdigit() for caracter in valor) <= 8
-                and all(caracter.isdigit() or caracter == "/" for caracter in valor)
-            )
-
-        validar_fecha = formulario.register(validar_fecha_en_campo)
+        tk.Label(formulario, text="Fecha (DD/MM/AAAA):", bg=COLOR_PANEL, fg=COLOR_TEXTO).pack(anchor="w")
         entrada_fecha = tk.Entry(
             formulario,
             width=20,
             justify="center",
             bg=COLOR_PANEL_CLARO,
-            fg=COLOR_GRIS,
-            insertbackground=COLOR_BLANCO,
+            fg=COLOR_TEXTO,
+            insertbackground=COLOR_TEXTO,
             relief="flat",
-            validate="key",
-            validatecommand=(validar_fecha, "%P"),
         )
         entrada_fecha.pack(anchor="w", pady=(4, 12), ipady=6)
-        entrada_fecha.configure(validate="none")
-        entrada_fecha.insert(0, "dd/mm/AAAA")
-        entrada_fecha.placeholder_activo = True
-        entrada_fecha.configure(validate="key")
-
-        def enfocar_fecha(_evento=None):
-            if entrada_fecha.placeholder_activo:
-                entrada_fecha.delete(0, tk.END)
-                entrada_fecha.configure(fg=COLOR_BLANCO)
-                entrada_fecha.placeholder_activo = False
-
-        def desenfocar_fecha(_evento=None):
-            if not entrada_fecha.get():
-                entrada_fecha.configure(validate="none", fg=COLOR_GRIS)
-                entrada_fecha.insert(0, "dd/mm/AAAA")
-                entrada_fecha.configure(validate="key")
-                entrada_fecha.placeholder_activo = True
-
-        def formatear_fecha(_evento=None):
-            if entrada_fecha.placeholder_activo:
-                return
-
-            contenido = entrada_fecha.get()
-            posicion = entrada_fecha.index(tk.INSERT)
-            digitos_antes = sum(
-                caracter.isdigit() for caracter in contenido[:posicion]
-            )
-            digitos = "".join(
-                caracter for caracter in contenido if caracter.isdigit()
-            )[:8]
-
-            if len(digitos) > 4:
-                formateada = f"{digitos[:2]}/{digitos[2:4]}/{digitos[4:]}"
-            elif len(digitos) > 2:
-                formateada = f"{digitos[:2]}/{digitos[2:]}"
-            else:
-                formateada = digitos
-
-            if formateada != contenido:
-                entrada_fecha.configure(validate="none")
-                entrada_fecha.delete(0, tk.END)
-                entrada_fecha.insert(0, formateada)
-                nueva_posicion = digitos_antes
-                if digitos_antes > 2:
-                    nueva_posicion += 1
-                if digitos_antes > 4:
-                    nueva_posicion += 1
-                entrada_fecha.icursor(min(nueva_posicion, len(formateada)))
-                entrada_fecha.configure(validate="key")
-
-        def permitir_solo_digitos(evento):
-            if evento.keysym in (
-                "BackSpace",
-                "Delete",
-                "Left",
-                "Right",
-                "Home",
-                "End",
-                "Tab",
-                "Return",
-                "KP_Enter",
-            ) or evento.state & 0x4:
-                return None
-            if evento.char and not evento.char.isdigit():
-                return "break"
-            return None
-
-        entrada_fecha.bind("<FocusIn>", enfocar_fecha)
-        entrada_fecha.bind("<FocusOut>", desenfocar_fecha, add="+")
-        entrada_fecha.bind("<KeyPress>", permitir_solo_digitos, add="+")
-        entrada_fecha.bind("<KeyRelease>", formatear_fecha, add="+")
-        entrada_fecha.bind(
-            "<<Paste>>",
-            lambda _evento: entrada_fecha.after_idle(formatear_fecha),
-            add="+",
-        )
 
         tk.Label(
             formulario,
             text="Horarios disponibles (turnos de 30 minutos):",
             font=FUENTE_BOTON,
             bg=COLOR_PANEL,
-            fg=COLOR_BLANCO,
+            fg=COLOR_TEXTO,
         ).pack(anchor="w")
         tk.Label(
             formulario,
@@ -998,7 +906,7 @@ class PantallaPaciente:
 
         hora_var = tk.StringVar(value="")
         menu_hora = tk.OptionMenu(formulario, hora_var, "")
-        menu_hora.configure(bg=COLOR_PANEL_CLARO, fg=COLOR_BLANCO, relief="flat")
+        menu_hora.configure(bg=COLOR_PANEL_CLARO, fg=COLOR_TEXTO, relief="flat")
         menu_hora.pack(anchor="w", pady=(0, 12))
 
         def seleccionado():
@@ -1049,17 +957,17 @@ class PantallaPaciente:
             pady=6,
         )
         self._boton_cita.pack(anchor="w", pady=(0, 12))
-        entrada_fecha.bind("<FocusOut>", actualizar_horarios, add="+")
+        entrada_fecha.bind("<FocusOut>", actualizar_horarios)
         entrada_fecha.bind("<Return>", actualizar_horarios)
         profesional_var.trace_add("write", lambda *_args: actualizar_horarios())
 
-        tk.Label(formulario, text="Motivo de la cita:", bg=COLOR_PANEL, fg=COLOR_BLANCO).pack(anchor="w")
+        tk.Label(formulario, text="Motivo de la cita:", bg=COLOR_PANEL, fg=COLOR_TEXTO).pack(anchor="w")
         entrada_motivo = tk.Entry(
             formulario,
             width=55,
             bg=COLOR_PANEL_CLARO,
-            fg=COLOR_BLANCO,
-            insertbackground=COLOR_BLANCO,
+            fg=COLOR_TEXTO,
+            insertbackground=COLOR_TEXTO,
             relief="flat",
         )
         entrada_motivo.pack(anchor="w", pady=(4, 8), ipady=6)
@@ -1067,8 +975,6 @@ class PantallaPaciente:
         def guardar():
             try:
                 profesional = seleccionado()
-                if entrada_fecha.placeholder_activo:
-                    raise ValueError("Ingresa la fecha con el formato dd/mm/AAAA.")
                 fecha = normalizar_fecha(entrada_fecha.get())
                 if not hora_var.get():
                     raise ValueError("Selecciona un horario disponible.")
@@ -1162,8 +1068,8 @@ class PantallaPaciente:
             height=17,
             font=("Arial", 10),
             bg=COLOR_PANEL_CLARO,
-            fg=COLOR_BLANCO,
-            insertbackground=COLOR_BLANCO,
+            fg=COLOR_TEXTO,
+            insertbackground=COLOR_TEXTO,
             relief="flat",
             bd=0,
             padx=15,
@@ -1296,8 +1202,8 @@ class PantallaPaciente:
             height=20,
             font=("Arial", 10),
             bg=COLOR_PANEL_CLARO,
-            fg=COLOR_BLANCO,
-            insertbackground=COLOR_BLANCO,
+            fg=COLOR_TEXTO,
+            insertbackground=COLOR_TEXTO,
             relief="flat",
             bd=0,
             padx=15,
@@ -1479,7 +1385,7 @@ class PantallaPaciente:
                 fila,
                 text=valor,
                 font=FUENTE_BOTON,
-                fg=COLOR_BLANCO,
+                fg=COLOR_TEXTO,
                 bg=COLOR_PANEL,
                 anchor="w"
             ).pack(

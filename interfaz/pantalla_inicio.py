@@ -7,6 +7,7 @@ from interfaz.estilos import (
     COLOR_ROJO_CLARO,
     COLOR_ROJO_OSCURO,
     COLOR_BLANCO,
+    COLOR_TEXTO,
     COLOR_GRIS_CLARO,
     COLOR_GRIS,
     FUENTE_TITULO,
@@ -121,7 +122,7 @@ class PantallaInicio:
             contenedor,
             text="SALUPRO",
             font=("Arial", 34, "bold"),
-            fg=COLOR_BLANCO,
+            fg=COLOR_TEXTO,
             bg=COLOR_FONDO
         )
 
@@ -152,7 +153,7 @@ class PantallaInicio:
             contenedor,
             text="BIENVENIDO A SALUPRO",
             font=FUENTE_TITULO,
-            fg=COLOR_BLANCO,
+            fg=COLOR_TEXTO,
             bg=COLOR_FONDO
         )
 
@@ -201,7 +202,7 @@ class PantallaInicio:
             height=3,
 
             bg=COLOR_PANEL,
-            fg=COLOR_BLANCO,
+            fg=COLOR_TEXTO,
 
             activebackground=COLOR_ROJO,
             activeforeground=COLOR_BLANCO,
@@ -266,7 +267,7 @@ class PantallaInicio:
             width=20,
             height=3,
             bg=COLOR_PANEL,
-            fg=COLOR_BLANCO,
+            fg=COLOR_TEXTO,
             activebackground=COLOR_ROJO,
             activeforeground=COLOR_BLANCO,
             relief="flat",
@@ -286,11 +287,17 @@ class PantallaInicio:
 
         boton_profesional.bind(
             "<Enter>",
-            lambda evento: boton_profesional.configure(bg=COLOR_ROJO)
+            lambda evento: boton_profesional.configure(
+                bg=COLOR_ROJO,
+                fg=COLOR_BLANCO,
+            )
         )
         boton_profesional.bind(
             "<Leave>",
-            lambda evento: boton_profesional.configure(bg=COLOR_PANEL)
+            lambda evento: boton_profesional.configure(
+                bg=COLOR_PANEL,
+                fg=COLOR_TEXTO,
+            )
         )
 
         # =====================================================
@@ -300,13 +307,15 @@ class PantallaInicio:
         def paciente_entrar(evento):
 
             boton_paciente.configure(
-                bg=COLOR_ROJO
+                bg=COLOR_ROJO,
+                fg=COLOR_BLANCO,
             )
 
         def paciente_salir(evento):
 
             boton_paciente.configure(
-                bg=COLOR_PANEL
+                bg=COLOR_PANEL,
+                fg=COLOR_TEXTO,
             )
 
         boton_paciente.bind(
@@ -495,12 +504,12 @@ class PantallaInicio:
 
         # Reemplaza el contenido de la misma ventana raíz.
         # No se crea una segunda ventana administrativa.
-        from interfaz.pantalla_administrativa import PantallaAdministrativa
+        from interfaz.pantalla_administrativa import VentanaPrincipal
 
         for widget in self.ventana.winfo_children():
             widget.destroy()
 
-        PantallaAdministrativa(
+        VentanaPrincipal(
             self.ventana,
             pantalla_inicio=self
         )
