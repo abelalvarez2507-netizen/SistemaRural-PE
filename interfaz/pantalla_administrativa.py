@@ -309,86 +309,6 @@ class VentanaPrincipal:
             self._vencimiento_after = None
 
     # =========================================================
-    # SCROLL / TOUCHPAD
-    # =========================================================
-
-    def _configurar_scroll(
-        self,
-        canvas,
-        widgets=None
-    ):
-        """Configura scroll vertical para mouse y touchpad."""
-
-        if widgets is None:
-            widgets = []
-
-        if not isinstance(widgets, (list, tuple)):
-            widgets = [widgets]
-
-        delta_acumulado = [0]
-
-        def desplazar_scroll(event):
-            try:
-                delta = getattr(
-                    event,
-                    "delta",
-                    0
-                )
-
-                if delta:
-                    # Conserva deltas pequeños que envían los touchpads.
-                    delta_acumulado[0] += delta
-                    unidades = int(delta_acumulado[0] / 120)
-                    if unidades:
-                        canvas.yview_scroll(-unidades, "units")
-                        delta_acumulado[0] -= unidades * 120
-                    return "break"
-
-                if getattr(event, "num", None) == 4:
-                    canvas.yview_scroll(-1, "units")
-                    return "break"
-                if getattr(event, "num", None) == 5:
-                    canvas.yview_scroll(1, "units")
-                    return "break"
-
-            except tk.TclError:
-                pass
-            return None
-
-        def enlazar_descendientes(widget):
-            try:
-                for secuencia in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
-                    widget.bind(secuencia, desplazar_scroll, add="+")
-                for hijo in widget.winfo_children():
-                    enlazar_descendientes(hijo)
-            except tk.TclError:
-                pass
-
-        enlazar_descendientes(canvas)
-        for widget in widgets:
-            enlazar_descendientes(widget)
-
-        # Compatibilidad con Linux.
-        try:
-            canvas.bind(
-                "<Button-4>",
-                lambda event: canvas.yview_scroll(
-                    -1,
-                    "units"
-                )
-            )
-
-            canvas.bind(
-                "<Button-5>",
-                lambda event: canvas.yview_scroll(
-                    1,
-                    "units"
-                )
-            )
-        except tk.TclError:
-            pass
-
-    # =========================================================
     # INTERFAZ PRINCIPAL
     # =========================================================
 
@@ -420,9 +340,9 @@ class VentanaPrincipal:
         # CONTENEDOR CON SCROLL
         # =====================================================
 
-        contenedor = tk.Frame(
+        contenedor = VistaDesplazable(
             self.ventana,
-            bg=COLOR_FONDO
+            COLOR_FONDO,
         )
 
         contenedor.pack(
@@ -433,71 +353,7 @@ class VentanaPrincipal:
         self._pantalla_principal = contenedor
         self._pantalla_actual = contenedor
 
-        canvas = tk.Canvas(
-            contenedor,
-            bg=COLOR_FONDO,
-            highlightthickness=0,
-            bd=0
-        )
-
-        scrollbar = tk.Scrollbar(
-            contenedor,
-            orient="vertical",
-            command=canvas.yview
-        )
-
-        canvas.configure(
-            yscrollcommand=scrollbar.set
-        )
-
-        scrollbar.pack(
-            side="right",
-            fill="y"
-        )
-
-        canvas.pack(
-            side="left",
-            fill="both",
-            expand=True
-        )
-
-        contenido = tk.Frame(
-            canvas,
-            bg=COLOR_FONDO
-        )
-
-        ventana_canvas = canvas.create_window(
-            (0, 0),
-            window=contenido,
-            anchor="nw"
-        )
-
-        def actualizar_scroll(event=None):
-            try:
-                canvas.configure(
-                    scrollregion=canvas.bbox("all")
-                )
-            except tk.TclError:
-                pass
-
-        def ajustar_ancho(event):
-            try:
-                canvas.itemconfigure(
-                    ventana_canvas,
-                    width=event.width
-                )
-            except tk.TclError:
-                pass
-
-        contenido.bind(
-            "<Configure>",
-            actualizar_scroll
-        )
-
-        canvas.bind(
-            "<Configure>",
-            ajustar_ancho
-        )
+        contenido = contenedor.contenido
 
         # =====================================================
         # INTERIOR
@@ -834,8 +690,13 @@ class VentanaPrincipal:
 
         fila_busqueda_rapida.columnconfigure(0, weight=1)
 
+        valor_busqueda_rapida = tk.StringVar(
+            master=self.ventana,
+        )
+
         entrada_busqueda_rapida = tk.Entry(
             fila_busqueda_rapida,
+            textvariable=valor_busqueda_rapida,
             bg=COLOR_PANEL_CLARO,
             fg=COLOR_TEXTO,
             insertbackground=COLOR_TEXTO,
@@ -857,6 +718,30 @@ class VentanaPrincipal:
             self.ventana,
             maximo=10,
         )
+
+        mensaje_busqueda = tk.Label(
+            interior,
+            text="",
+            font=FUENTE_PEQUENA,
+            bg=COLOR_FONDO,
+            fg=COLOR_ROJO,
+            anchor="w",
+        )
+
+        def mostrar_mensaje_busqueda(mensaje):
+            mensaje_busqueda.configure(text=mensaje)
+            if not mensaje_busqueda.winfo_manager():
+                mensaje_busqueda.pack(
+                    fill="x",
+                    padx=14,
+                    pady=(0, 12),
+                    after=tarjeta_busqueda,
+                )
+
+        def limpiar_mensaje_busqueda(*_args):
+            mensaje_busqueda.configure(text="")
+            if mensaje_busqueda.winfo_manager():
+                mensaje_busqueda.pack_forget()
 
         def presentar_resultado_busqueda(contenido):
             pantalla_resultado = self._crear_pantalla_interna(
@@ -928,25 +813,16 @@ class VentanaPrincipal:
         def buscar_rapido(evento=None):
             valor = entrada_busqueda_rapida.get().strip()
 
-            if not valor:
-                presentar_resultado_busqueda(
-                    "Escribe un código de paciente o profesional, "
-                    "o un DNI de 8 dígitos."
-                )
+            if len(valor) < 2:
                 return "break"
 
             if not self.validar_entrada_busqueda(valor, maximo=10):
-                presentar_resultado_busqueda(
+                mostrar_mensaje_busqueda(
                     "Usa únicamente letras, números, guion o guion bajo."
                 )
                 return "break"
 
-            if len(valor) < 2:
-                presentar_resultado_busqueda(
-                    "El código debe tener al menos 2 caracteres. "
-                    "El DNI debe contener exactamente 8 dígitos."
-                )
-                return "break"
+            limpiar_mensaje_busqueda()
 
             try:
                 pacientes_encontrados = (
@@ -980,7 +856,7 @@ class VentanaPrincipal:
                         )
                     )
             except (ValueError, TypeError) as error:
-                presentar_resultado_busqueda(str(error))
+                mostrar_mensaje_busqueda(str(error))
                 return "break"
 
             citas = self.sistema.obtener_citas()
@@ -1112,7 +988,7 @@ class VentanaPrincipal:
                 ))
 
             if not bloques:
-                presentar_resultado_busqueda(
+                mostrar_mensaje_busqueda(
                     "No se encontró un paciente ni profesional con ese "
                     "código o DNI."
                 )
@@ -1126,8 +1002,10 @@ class VentanaPrincipal:
             text="Buscar",
             command=buscar_rapido,
             font=FUENTE_BOTON,
-            bg=COLOR_ROJO,
-            fg=COLOR_BLANCO,
+            bg=COLOR_PANEL_CLARO,
+            fg=COLOR_GRIS,
+            disabledforeground=COLOR_GRIS,
+            state=tk.DISABLED,
             activebackground=COLOR_ROJO_CLARO,
             activeforeground=COLOR_BLANCO,
             relief="flat",
@@ -1143,17 +1021,41 @@ class VentanaPrincipal:
             sticky="e",
         )
 
+        def actualizar_estado_busqueda(*_args):
+            valor = valor_busqueda_rapida.get().strip()
+            habilitado = (
+                len(valor) >= 2
+                and self.validar_entrada_busqueda(valor, maximo=10)
+            )
+            boton_buscar_rapido.configure(
+                state=(tk.NORMAL if habilitado else tk.DISABLED),
+                bg=(COLOR_ROJO if habilitado else COLOR_PANEL_CLARO),
+                fg=(COLOR_BLANCO if habilitado else COLOR_GRIS),
+            )
+            limpiar_mensaje_busqueda()
+
+        valor_busqueda_rapida.trace_add(
+            "write",
+            actualizar_estado_busqueda,
+        )
+
+        def resaltar_boton_buscar(_evento):
+            if boton_buscar_rapido["state"] != tk.DISABLED:
+                boton_buscar_rapido.configure(bg=COLOR_ROJO_CLARO)
+
+        def restaurar_boton_buscar(_evento):
+            habilitado = boton_buscar_rapido["state"] != tk.DISABLED
+            boton_buscar_rapido.configure(
+                bg=(COLOR_ROJO if habilitado else COLOR_PANEL_CLARO),
+            )
+
         boton_buscar_rapido.bind(
             "<Enter>",
-            lambda evento: boton_buscar_rapido.configure(
-                bg=COLOR_ROJO_CLARO
-            ),
+            resaltar_boton_buscar,
         )
         boton_buscar_rapido.bind(
             "<Leave>",
-            lambda evento: boton_buscar_rapido.configure(
-                bg=COLOR_ROJO
-            ),
+            restaurar_boton_buscar,
         )
         entrada_busqueda_rapida.bind("<Return>", buscar_rapido)
         entrada_busqueda_rapida.focus_set()
@@ -1911,28 +1813,6 @@ class VentanaPrincipal:
         ).pack(
             side="left"
         )
-
-        # =====================================================
-        # CONFIGURACIÓN SCROLL
-        # =====================================================
-
-        self._configurar_scroll(
-            canvas,
-            [
-                contenido,
-                interior,
-                zona
-            ]
-        )
-
-        canvas.update_idletasks()
-
-        try:
-            canvas.configure(
-                scrollregion=canvas.bbox("all")
-            )
-        except tk.TclError:
-            pass
 
     # =========================================================
     # PANTALLA COMPLETA

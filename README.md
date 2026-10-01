@@ -2,35 +2,54 @@
 
 ## Sistema de gestión para un establecimiento de salud rural
 
-SistemaRural-PE es un prototipo académico de escritorio desarrollado en
-Python para gestionar pacientes, profesionales de salud, citas, atenciones
-médicas y reportes básicos en un contexto de salud rural.
+SistemaRural-PE (SaluPro) es un prototipo académico de escritorio desarrollado
+en Python para gestionar pacientes, profesionales de salud, citas, atenciones
+médicas e informes básicos en un establecimiento de salud rural. Utiliza
+Tkinter para la interfaz gráfica y SQLite para guardar la información.
 
 ## 1. Funcionalidades
 
-- Registro y consulta de pacientes.
-- Registro y consulta de profesionales de salud.
-- Búsqueda por código o DNI.
-- Registro, consulta y actualización de citas.
-- Registro y consulta de atenciones médicas.
-- Historial clínico y de pacientes.
-- Reportes y estadísticas básicas.
+- Registro y consulta de pacientes y profesionales de salud.
+- Acceso a los módulos de paciente, profesional y administración.
+- Búsqueda por código o DNI en los portales de paciente y profesional.
+- Búsqueda rápida administrativa por código de paciente, DNI de paciente,
+  código profesional o DNI profesional.
+- Resultados de búsqueda con los datos del paciente, sus citas y atenciones,
+  el profesional que lo atendió y el diagnóstico registrado. El DNI se muestra
+  enmascarado.
+- La búsqueda rápida acepta códigos de 2 a 10 caracteres y DNI de 8 dígitos.
+  Los valores de ocho dígitos se comprueban tanto como código como DNI. Si no
+  hay coincidencias, muestra un aviso en el panel sin abrir la pantalla de
+  resultados.
+- Pantalla interna de resultados con botón **← Volver**; el panel administrativo
+  queda oculto mientras se consulta el resultado.
+- Registro, consulta, cancelación y reprogramación de citas.
+- Registro y actualización de atenciones médicas e historiales clínicos.
+- Turnos de 30 minutos entre las 08:00 y las 17:00. El sistema rechaza citas
+  pasadas y evita reservar el mismo horario para un profesional.
+- Cancelación automática de citas pendientes o reprogramadas que ya vencieron.
+- Reportes y estadísticas básicas del establecimiento.
+- Desplazamiento vertical con la barra, la rueda del mouse y el touchpad en las
+  pantallas largas, incluido el panel administrativo.
+- Navegación dentro de una sola ventana raíz. **Alt+←** vuelve a la pantalla
+  anterior, **Alt+Inicio** regresa al inicio y **F11** alterna la pantalla
+  completa.
 - Validación de datos y manejo de errores.
-- Interfaz gráfica con navegación en una sola ventana.
-- Maximización y pantalla completa mediante F11.
-- Protección del DNI mediante PBKDF2-HMAC-SHA256 con sal aleatoria.
-- Pruebas automatizadas con pytest.
+- Protección de DNI con PBKDF2-HMAC-SHA256 y una sal aleatoria.
 
 ## 2. Paradigmas aplicados
 
-- **Programación Orientada a Objetos:** entidades, herencia, encapsulamiento y lógica de dominio.
-- **Programación Funcional:** `map`, `filter`, `lambda` y procesamiento de colecciones.
-- **Programación Orientada a Eventos:** botones, teclado y eventos de Tkinter.
+- **Programación orientada a objetos:** modelos de dominio, herencia,
+  encapsulamiento y coordinación de operaciones del sistema.
+- **Programación funcional:** uso de `map`, `filter`, `lambda` y procesamiento
+  de colecciones.
+- **Programación orientada a eventos:** botones, teclado y eventos de Tkinter.
 
 ## 3. Patrones de diseño
 
-- **Singleton:** `GestorBaseDatos` administra las conexiones SQLite.
-- **Factory:** `FabricaEntidades` centraliza la creación de entidades.
+- **Singleton:** `GestorBaseDatos` administra las conexiones a SQLite.
+- **Factory:** `FabricaEntidades` centraliza la creación de pacientes,
+  profesionales, citas y atenciones.
 
 ## 4. Arquitectura
 
@@ -39,7 +58,9 @@ SistemaRural-PE/
 ├── interfaz/
 │   ├── pantalla_inicio.py
 │   ├── pantalla_paciente.py
-│   ├── ventana_principal.py
+│   ├── pantalla_profesional.py
+│   ├── pantalla_administrativa.py
+│   ├── navegacion.py
 │   └── estilos.py
 ├── modelos/
 │   ├── persona.py
@@ -62,6 +83,7 @@ SistemaRural-PE/
 ├── datos/
 │   └── salud.db
 ├── imagenes/
+│   └── logo_salupro.png
 ├── main.py
 ├── requirements.txt
 └── README.md
@@ -69,49 +91,43 @@ SistemaRural-PE/
 
 ## 5. Instalación
 
-Se recomienda usar un entorno virtual.
-
-```bash
-python -m venv venv
-```
-
-### Windows PowerShell
+Se recomienda Python 3.10 o posterior y el uso de un entorno virtual.
 
 ```powershell
+python -m venv venv
 venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
 ```
 
 ## 6. Ejecución
 
-```bash
+```powershell
 python main.py
 ```
 
-La aplicación se abre en una sola ventana raíz. Las pantallas internas reemplazan
-el contenido anterior y utilizan el botón **← Volver** para regresar al nivel
+La aplicación se abre en una sola ventana. Las pantallas internas reemplazan
+temporalmente la vista anterior y utilizan **← Volver** para regresar al nivel
 correspondiente.
 
 ## 7. Pruebas automatizadas
 
-Ejecutar:
+Ejecuta las pruebas con:
 
-```bash
+```powershell
 python -m pytest
 ```
 
-La versión revisada del proyecto contiene **32 pruebas automatizadas aprobadas**.
-Las pruebas cubren registro, búsquedas, validaciones, citas, atenciones,
-protección de DNI, persistencia, migración de datos y patrones Singleton/Factory.
+La versión revisada contiene **32 pruebas automatizadas aprobadas**. Cubren
+registro y búsqueda, validaciones, citas, atenciones, protección de DNI,
+persistencia, migración de datos y los patrones Singleton y Factory.
 
 ## 8. Tratamiento de datos personales
 
-El prototipo utiliza datos ficticios. El DNI no se almacena en texto plano:
-se protege mediante una huella derivada con PBKDF2-HMAC-SHA256 y una sal aleatoria.
-Las pantallas muestran el DNI enmascarado y las búsquedas verifican la huella
-sin recuperar el DNI original desde SQLite.
+El DNI no se almacena en texto plano: se protege mediante PBKDF2-HMAC-SHA256
+con una sal aleatoria. La aplicación verifica la huella protegida durante la
+búsqueda y muestra el DNI enmascarado.
 
 El sistema tiene finalidad académica y no debe considerarse una solución lista
-para producción. Un despliegue real requeriría, entre otros controles, gestión
-de usuarios y roles, auditoría, respaldos, políticas de conservación y medidas
-adicionales de seguridad.
+para producción. Un despliegue real requeriría controles adicionales, como
+gestión de usuarios y roles, auditoría, respaldos, políticas de conservación y
+medidas de seguridad adicionales.
