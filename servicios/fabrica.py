@@ -1,5 +1,6 @@
 from modelos.paciente import Paciente
 from modelos.personal_salud import PersonalSalud
+from modelos.personal_enfermeria import PersonalEnfermeria
 from modelos.cita import Cita
 from modelos.atencion_medica import AtencionMedica
 
@@ -48,7 +49,12 @@ class FabricaEntidades:
         edad,
         especialidad
     ):
-        return PersonalSalud(
+        clase = (
+            PersonalEnfermeria
+            if "enfermer" in str(especialidad).casefold()
+            else PersonalSalud
+        )
+        return clase(
             codigo_profesional,
             dni,
             nombre,
@@ -65,7 +71,12 @@ class FabricaEntidades:
         edad,
         especialidad
     ):
-        return PersonalSalud.desde_datos_protegidos(
+        clase = (
+            PersonalEnfermeria
+            if "enfermer" in str(especialidad).casefold()
+            else PersonalSalud
+        )
+        return clase.desde_datos_protegidos(
             codigo_profesional,
             dni_hash,
             dni_salt,
@@ -99,11 +110,13 @@ class FabricaEntidades:
         codigo,
         cita,
         diagnostico,
-        estado="Pendiente"
+        estado="Pendiente",
+        recetas=None,
     ):
         return AtencionMedica(
             codigo,
             cita,
             diagnostico,
-            estado
+            estado,
+            recetas,
         )

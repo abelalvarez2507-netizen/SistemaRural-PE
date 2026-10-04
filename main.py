@@ -10,6 +10,7 @@ def main():
     """
 
     ventana = tk.Tk()
+    ventana.minsize(720, 560)
 
     try:
         ventana.state("zoomed")

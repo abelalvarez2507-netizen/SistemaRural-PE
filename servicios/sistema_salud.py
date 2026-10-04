@@ -2,7 +2,9 @@ from modelos.paciente import Paciente
 from modelos.cita import Cita
 from modelos.personal_salud import PersonalSalud
 from modelos.atencion_medica import AtencionMedica
-from datetime import datetime, timedelta
+from modelos.medicamento_recetado import MedicamentoRecetado
+from datetime import date, datetime, timedelta
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from servicios.repositorio import RepositorioSalud
 from servicios.fabrica import FabricaEntidades
@@ -227,15 +229,18 @@ class SistemaSalud:
                     "una cita inexistente."
                 )
 
-            atencion = (
-                FabricaEntidades.crear_atencion(
-                    codigo,
-                    cita,
-                    diagnostico,
-                    estado
-                )
+            recetas = [
+                MedicamentoRecetado(medicamento, dias, cada_cuanto)
+                for medicamento, dias, cada_cuanto
+                in self._repositorio.obtener_recetas_atencion(codigo)
+            ] if hasattr(self._repositorio, "obtener_recetas_atencion") else []
+            atencion = FabricaEntidades.crear_atencion(
+                codigo,
+                cita,
+                diagnostico,
+                estado,
+                recetas,
             )
-
             self._atenciones.append(atencion)
 
     # =========================================================
@@ -265,6 +270,27 @@ class SistemaSalud:
             numero += 1
 
         return f"P{numero:03d}"
+
+    def generar_codigo_personal(self, prefijo):
+        """Devuelve el siguiente código libre para un prefijo, sin tope de cifras."""
+        prefijo = str(prefijo or "").strip().upper()
+        if not prefijo.isalpha():
+            raise ValueError("El prefijo del código de personal no es válido.")
+        ocupados = set()
+        for persona in self._personal:
+            codigo = persona.codigo_personal.upper()
+            if codigo.startswith(prefijo) and codigo[len(prefijo):].isdigit():
+                ocupados.add(int(codigo[len(prefijo):]))
+        numero = 1
+        while numero in ocupados:
+            numero += 1
+        return f"{prefijo}{numero:03d}"
+
+    @staticmethod
+    def validar_codigo_medico(codigo_medico):
+        if str(codigo_medico or "").strip().upper() != "SALUDPRO":
+            raise ValueError("El código médico ingresado no es válido.")
+        return "SALUDPRO"
 
     def generar_codigo_cita(self):
 
@@ -362,8 +388,12 @@ class SistemaSalud:
 
     def registrar_personal(
         self,
-        profesional
+        profesional,
+        codigo_medico=None,
     ):
+
+        if codigo_medico is not None:
+            self.validar_codigo_medico(codigo_medico)
 
         if not isinstance(
             profesional,
@@ -656,7 +686,7 @@ class SistemaSalud:
         # su propio estado (Pendiente, En proceso o Finalizada).
         self.actualizar_estado_cita(cita.codigo, "Atendida")
 
-    def actualizar_atencion(self, codigo_atencion, diagnostico):
+    def actualizar_atencion(self, codigo_atencion, diagnostico, recetas=None):
         atencion = next(
             (item for item in self._atenciones if item.codigo == codigo_atencion),
             None,
@@ -668,6 +698,12 @@ class SistemaSalud:
             codigo_atencion,
             atencion.diagnostico,
         )
+        if recetas is not None:
+            atencion.recetas = self._validar_recetas(recetas)
+            self._repositorio.guardar_recetas_atencion(
+                codigo_atencion,
+                atencion.recetas,
+            )
         self.actualizar_estado_atencion(codigo_atencion, "Finalizada")
         self.actualizar_estado_cita(atencion.cita.codigo, "Atendida")
 
@@ -765,6 +801,139 @@ class SistemaSalud:
 
     def obtener_atenciones(self):
         return list(self._atenciones)
+
+    @staticmethod
+    def _validar_recetas(recetas):
+        resultado = []
+        for receta in recetas or []:
+            if isinstance(receta, MedicamentoRecetado):
+                resultado.append(receta)
+            else:
+                resultado.append(MedicamentoRecetado(*receta))
+        return resultado
+
+    # =========================================================
+    # MEDICAMENTOS Y VENTAS
+    # =========================================================
+
+    @staticmethod
+    def _entero_no_negativo(valor, etiqueta):
+        try:
+            numero = int(str(valor).strip())
+        except (TypeError, ValueError):
+            raise ValueError(f"{etiqueta} debe ser un número entero.") from None
+        if numero < 0:
+            raise ValueError(f"{etiqueta} no puede ser negativo.")
+        return numero
+
+    @staticmethod
+    def _precio_medicamento(valor):
+        try:
+            texto = str(valor).strip()
+            if "," in texto and "." not in texto:
+                texto = texto.replace(",", ".")
+            precio = Decimal(texto).quantize(
+                Decimal("0.01"), rounding=ROUND_HALF_UP
+            )
+        except (InvalidOperation, ValueError, TypeError):
+            raise ValueError("El precio debe ser un importe válido.") from None
+        if not precio.is_finite() or precio < 0:
+            raise ValueError("El precio no puede ser negativo.")
+        return float(precio)
+
+    def registrar_medicamento(
+        self,
+        nombre,
+        principio_activo,
+        presentacion,
+        lote,
+        vencimiento,
+        stock,
+        stock_minimo,
+        precio_venta,
+        registrado_por,
+    ):
+        nombre = str(nombre or "").strip()
+        principio_activo = str(principio_activo or "").strip()
+        presentacion = str(presentacion or "").strip()
+        lote = str(lote or "").strip()
+        registrado_por = str(registrado_por or "").strip()
+        if not nombre:
+            raise ValueError("Ingresa el nombre del medicamento.")
+        if not lote:
+            raise ValueError("Ingresa el número de lote.")
+        if not registrado_por:
+            raise ValueError("No se pudo identificar a quien registra el medicamento.")
+        try:
+            vencimiento = datetime.strptime(
+                str(vencimiento).strip(), "%Y-%m-%d"
+            ).date().isoformat()
+        except (TypeError, ValueError):
+            raise ValueError("Usa la fecha de vencimiento AAAA-MM-DD.") from None
+        stock = self._entero_no_negativo(stock, "El stock")
+        if stock == 0:
+            raise ValueError("El stock inicial debe ser mayor que cero.")
+        stock_minimo = self._entero_no_negativo(
+            stock_minimo, "El stock mínimo"
+        )
+        if vencimiento < date.today().isoformat():
+            raise ValueError("La fecha de vencimiento no puede estar en el pasado.")
+        precio_venta = self._precio_medicamento(precio_venta)
+        return self._repositorio.guardar_medicamento(
+            nombre,
+            principio_activo,
+            presentacion,
+            lote,
+            vencimiento,
+            stock,
+            stock_minimo,
+            precio_venta,
+            registrado_por,
+        )
+
+    def obtener_medicamentos(self):
+        return self._repositorio.obtener_medicamentos()
+
+    def obtener_medicamentos_disponibles(self):
+        return self._repositorio.obtener_medicamentos_disponibles(
+            date.today().isoformat()
+        )
+
+    def vender_medicamento(self, medicamento_id, cantidad, paciente_codigo, vendido_por):
+        try:
+            medicamento_id = int(medicamento_id)
+        except (TypeError, ValueError):
+            raise ValueError("Selecciona un medicamento registrado.") from None
+        if medicamento_id <= 0:
+            raise ValueError("Selecciona un medicamento registrado.")
+        cantidad = self._entero_no_negativo(cantidad, "La cantidad")
+        if cantidad == 0:
+            raise ValueError("La cantidad debe ser mayor que cero.")
+        paciente_codigo = str(paciente_codigo or "").strip()
+        paciente = next(
+            (p for p in self._pacientes if p.codigo.casefold() == paciente_codigo.casefold()),
+            None,
+        )
+        if paciente is None:
+            raise ValueError("Ingresa el código de un paciente registrado.")
+        vendido_por = str(vendido_por or "").strip()
+        if not vendido_por:
+            raise ValueError("No se pudo identificar a quien registra la venta.")
+        return self._repositorio.registrar_venta_medicamento(
+            medicamento_id,
+            cantidad,
+            paciente.codigo,
+            vendido_por,
+            datetime.now().isoformat(timespec="seconds"),
+        )
+
+    def obtener_ventas_medicamentos(self, limite=100):
+        return self._repositorio.obtener_ventas_medicamentos(limite)
+
+    def obtener_estadisticas_medicamentos(self):
+        return self._repositorio.obtener_estadisticas_medicamentos(
+            date.today().isoformat()
+        )
 
     # =========================================================
     # CITAS POR ESTADO
@@ -887,7 +1056,12 @@ class SistemaSalud:
         return {
             "paciente": paciente,
             "citas": citas,
-            "atenciones": atenciones
+            "atenciones": atenciones,
+            "ventas_medicamentos": (
+                self._repositorio.obtener_ventas_paciente(paciente.codigo)
+                if hasattr(self._repositorio, "obtener_ventas_paciente")
+                else []
+            ),
         }
 
     # =========================================================

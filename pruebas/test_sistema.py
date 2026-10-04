@@ -601,3 +601,47 @@ def test_obtener_nombres_pacientes_usa_map():
 
         assert sistema.obtener_nombres_pacientes() == ["Paciente Demo"]
         repositorio.cerrar()
+
+
+def test_paciente_nuevo_puede_crear_su_cuenta():
+    from servicios.autenticacion import ServicioAutenticacion
+
+    with tempfile.TemporaryDirectory() as carpeta:
+        servicio = ServicioAutenticacion(
+            RepositorioSalud(os.path.join(carpeta, "prueba.db"))
+        )
+        try:
+            sesion = servicio.registrar_paciente_nuevo(
+                "María Pérez",
+                "25",
+                "12345678",
+                "maria.p",
+                "clave1234",
+                acepta_terminos=True,
+            )
+            assert sesion.rol == "paciente"
+            assert sesion.codigo_referencia == "P001"
+            assert servicio.autenticar("maria.p", "clave1234", "paciente")
+
+            # DNI o usuario repetidos se rechazan sin dejar datos a medias.
+            with pytest.raises(ValueError):
+                servicio.registrar_paciente_nuevo(
+                    "Ana Ruiz",
+                    "30",
+                    "12345678",
+                    "ana.r",
+                    "clave1234",
+                    acepta_terminos=True,
+                )
+            with pytest.raises(ValueError):
+                servicio.registrar_paciente_nuevo(
+                    "Ana Ruiz",
+                    "30",
+                    "87654321",
+                    "maria.p",
+                    "clave1234",
+                    acepta_terminos=True,
+                )
+            assert len(servicio.repositorio.obtener_pacientes()) == 1
+        finally:
+            servicio.cerrar()

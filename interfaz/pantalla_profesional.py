@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import messagebox
 
 from modelos.atencion_medica import AtencionMedica
+from modelos.medicamento_recetado import MedicamentoRecetado
 from servicios.sistema_salud import SistemaSalud
 from servicios.validaciones import validar_diagnostico
 
@@ -21,21 +22,37 @@ from interfaz.estilos import (
     FUENTE_SECCION,
     FUENTE_BOTON,
 )
-from interfaz.navegacion import VistaDesplazable, instalar_navegacion
+from interfaz.navegacion import (
+    PASO_FINO,
+    VistaDesplazable,
+    comando_barra,
+    desplazar_por_evento,
+    instalar_navegacion,
+)
 
 
 class PantallaProfesional:
     """Portal de agenda y registro de atenciones del profesional."""
 
-    def __init__(self, ventana, pantalla_inicio):
+    def __init__(self, ventana, pantalla_inicio, sesion):
+        if sesion is None or sesion.rol != "profesional":
+            raise ValueError("Se requiere una sesión profesional autenticada.")
         self.ventana = ventana
         self.pantalla_inicio = pantalla_inicio
+        self.sesion = sesion
         self.sistema = SistemaSalud()
-        self.profesional_actual = None
+        profesionales = self.sistema.buscar_personal_por_codigo(
+            sesion.codigo_referencia or ""
+        )
+        if not profesionales:
+            self.sistema.cerrar()
+            raise ValueError("La cuenta ya no está vinculada a personal activo.")
+        self.profesional_actual = profesionales[0]
         self._temporizador = None
+        self._pantalla_en_edicion = False
         self.ventana.title("SaluPro - Portal del Profesional")
         self.ventana.configure(bg=COLOR_FONDO)
-        self.mostrar_acceso()
+        self.mostrar_agenda()
 
     def _limpiar(self):
         for widget in self.ventana.winfo_children():
@@ -85,7 +102,7 @@ class PantallaProfesional:
         )
         return boton
 
-    def _marco_base(self, titulo, subtitulo=None):
+    def _marco_base(self, titulo, subtitulo=None, volver=None):
         self._limpiar()
         vista = VistaDesplazable(self.ventana, COLOR_FONDO)
         vista.pack(fill="both", expand=True)
@@ -93,15 +110,15 @@ class PantallaProfesional:
         contenedor.configure(padx=32, pady=22)
         instalar_navegacion(
             self.ventana,
-            volver=self.volver_a_inicio,
+            volver=volver or self.volver_a_inicio,
             inicio=self.volver_a_inicio,
         )
         barra = tk.Frame(contenedor, bg=COLOR_FONDO)
         barra.pack(fill="x", pady=(0, 18))
         self._boton(
             barra,
-            "← Volver al inicio",
-            self.volver_a_inicio,
+            "← Volver a la agenda" if volver else "← Volver al inicio",
+            volver or self.volver_a_inicio,
             COLOR_PANEL,
         ).pack(side="left")
         tk.Label(
@@ -177,18 +194,20 @@ class PantallaProfesional:
 
     @staticmethod
     def _validar_identificacion(valor):
-        return len(valor) <= 10 and all(
+        return all(
             caracter.isalnum() or caracter in "-_" for caracter in valor
         )
 
     def autenticar(self):
+        if self.profesional_actual is not None:
+            return
         valor = self.entrada_identificacion.get().strip()
         if not valor:
             messagebox.showwarning("Dato requerido", "Ingresa tu código o DNI.")
             return
         if valor.isdigit() and len(valor) == 8:
             profesionales = self.sistema.buscar_personal_por_dni(valor)
-        elif self._validar_identificacion(valor) and 2 <= len(valor) <= 10:
+        elif self._validar_identificacion(valor) and len(valor) >= 2:
             profesionales = self.sistema.buscar_personal_por_codigo(valor)
         else:
             profesionales = []
@@ -202,6 +221,7 @@ class PantallaProfesional:
         self.mostrar_agenda()
 
     def mostrar_agenda(self):
+        self._pantalla_en_edicion = False
         profesional = self.profesional_actual
         self.sistema.actualizar_citas_vencidas()
         contenedor = self._marco_base(
@@ -236,9 +256,11 @@ class PantallaProfesional:
             agenda,
             bg=COLOR_FONDO,
             highlightthickness=0,
-            yscrollincrement=20,
+            yscrollincrement=PASO_FINO,
         )
-        barra = tk.Scrollbar(agenda, orient="vertical", command=canvas.yview)
+        barra = tk.Scrollbar(
+            agenda, orient="vertical", command=comando_barra(canvas)
+        )
         contenido = tk.Frame(canvas, bg=COLOR_FONDO)
         ventana_canvas = canvas.create_window(
             (0, 0), window=contenido, anchor="nw"
@@ -347,36 +369,20 @@ class PantallaProfesional:
         if self.profesional_actual is not None:
             try:
                 vencidas = self.sistema.actualizar_citas_vencidas()
-                if vencidas:
+                if vencidas and not self._pantalla_en_edicion:
                     self.mostrar_agenda()
-                else:
-                    self._temporizador = self.ventana.after(
-                        60000,
-                        self._actualizar_si_activo,
-                    )
+                self._temporizador = self.ventana.after(
+                    60000,
+                    self._actualizar_si_activo,
+                )
             except tk.TclError:
                 pass
 
     @staticmethod
     def _enlazar_rueda(canvas, contenedor):
-        delta_acumulado = [0]
-
         def desplazar(evento):
-            delta = getattr(evento, "delta", 0)
-            if delta:
-                delta_acumulado[0] += delta
-                unidades = int(delta_acumulado[0] / 120)
-                if unidades:
-                    canvas.yview_scroll(-unidades, "units")
-                    delta_acumulado[0] -= unidades * 120
-                return "break"
-            if getattr(evento, "num", None) == 4:
-                canvas.yview_scroll(-1, "units")
-                return "break"
-            if getattr(evento, "num", None) == 5:
-                canvas.yview_scroll(1, "units")
-                return "break"
-            return None
+            resultado = desplazar_por_evento(canvas, evento)
+            return None if resultado is None else "break"
 
         def enlazar(widget):
             try:
@@ -402,16 +408,12 @@ class PantallaProfesional:
 
     def editar_atencion(self, cita):
         atencion = self._atencion_de(cita)
-        ventana = tk.Toplevel(self.ventana)
-        ventana.title("Opinión médica")
-        ventana.configure(bg=COLOR_FONDO)
-        ventana.geometry("720x560")
-        ventana.minsize(600, 420)
-        ventana.transient(self.ventana)
-        ventana.grab_set()
-        vista = VistaDesplazable(ventana, COLOR_FONDO)
-        vista.pack(fill="both", expand=True)
-        contenido = vista.contenido
+        self._pantalla_en_edicion = True
+        contenido = self._marco_base(
+            "Opinión médica",
+            f"Atención a {cita.paciente.nombre} · {cita.fecha} {cita.hora}",
+            volver=self.mostrar_agenda,
+        )
         tk.Label(
             contenido,
             text=f"Atención a {cita.paciente.nombre} · {cita.fecha} {cita.hora}",
@@ -429,47 +431,139 @@ class PantallaProfesional:
         texto = tk.Text(
             contenido,
             width=62,
-            height=10,
+            height=7,
             wrap="word",
             bg=COLOR_PANEL_CLARO,
             fg=COLOR_TEXTO,
             insertbackground=COLOR_TEXTO,
             relief="flat",
         )
-        texto.pack(fill="both", expand=True, padx=22, pady=8)
+        texto.pack(fill="x", padx=22, pady=8)
         if atencion:
             texto.insert("1.0", atencion.diagnostico)
+
+        panel_recetas = tk.Frame(contenido, bg=COLOR_PANEL, padx=14, pady=12)
+        panel_recetas.pack(fill="x", padx=22, pady=(4, 10))
+        tk.Label(
+            panel_recetas,
+            text="Medicamentos recetados",
+            font=FUENTE_SECCION,
+            fg=COLOR_TEXTO,
+            bg=COLOR_PANEL,
+        ).pack(anchor="w")
+        tk.Label(
+            panel_recetas,
+            text="Indica el medicamento, la duración en días y cada cuánto debe tomarse.",
+            font=FUENTE_BOTON,
+            fg=COLOR_GRIS,
+            bg=COLOR_PANEL,
+            wraplength=760,
+            justify="left",
+        ).pack(anchor="w", pady=(2, 8))
+        encabezados = tk.Frame(panel_recetas, bg=COLOR_PANEL)
+        encabezados.pack(fill="x")
+        for columna, (titulo, peso) in enumerate((("Medicamento", 3), ("Días", 1), ("Cada cuánto", 2))):
+            encabezados.columnconfigure(columna, weight=peso)
+            tk.Label(
+                encabezados,
+                text=titulo,
+                font=FUENTE_BOTON,
+                fg=COLOR_GRIS_CLARO,
+                bg=COLOR_PANEL,
+            ).grid(row=0, column=columna, sticky="w", padx=3)
+
+        filas_recetas = []
+        contenedor_filas = tk.Frame(panel_recetas, bg=COLOR_PANEL)
+        contenedor_filas.pack(fill="x")
+
+        def agregar_fila_receta(medicamento="", dias="", cada_cuanto=""):
+            fila = tk.Frame(contenedor_filas, bg=COLOR_PANEL)
+            fila.pack(fill="x", pady=3)
+            campos = []
+            for columna, (valor, peso) in enumerate(((medicamento, 3), (dias, 1), (cada_cuanto, 2))):
+                entrada = tk.Entry(
+                    fila,
+                    font=FUENTE_BOTON,
+                    bg=COLOR_PANEL_CLARO,
+                    fg=COLOR_TEXTO,
+                    insertbackground=COLOR_TEXTO,
+                    relief="flat",
+                )
+                entrada.grid(row=0, column=columna, sticky="ew", padx=3, ipady=6)
+                fila.columnconfigure(columna, weight=peso)
+                if valor:
+                    entrada.insert(0, str(valor))
+                campos.append(entrada)
+            def quitar():
+                fila.destroy()
+                filas_recetas.remove(campos)
+            tk.Button(
+                fila,
+                text="Quitar",
+                command=quitar,
+                font=FUENTE_BOTON,
+                bg=COLOR_PANEL_CLARO,
+                fg=COLOR_TEXTO,
+                relief="flat",
+                bd=0,
+                cursor="hand2",
+                padx=8,
+            ).grid(row=0, column=3, padx=(4, 0))
+            filas_recetas.append(campos)
+
+        if atencion and atencion.recetas:
+            for receta in atencion.recetas:
+                agregar_fila_receta(receta.medicamento, receta.dias, receta.cada_cuanto)
+        else:
+            agregar_fila_receta()
+
+        self._boton(
+            panel_recetas,
+            "+ Agregar medicamento",
+            agregar_fila_receta,
+            COLOR_PANEL_CLARO,
+        ).pack(anchor="w", pady=(8, 0))
+
+        def leer_recetas():
+            recetas = []
+            for medicamento, dias, cada_cuanto in filas_recetas:
+                valores = (medicamento.get().strip(), dias.get().strip(), cada_cuanto.get().strip())
+                if not any(valores):
+                    continue
+                recetas.append(MedicamentoRecetado(*valores))
+            return recetas
 
         def guardar():
             try:
                 diagnostico = validar_diagnostico(texto.get("1.0", "end-1c"))
+                recetas = leer_recetas()
                 if atencion:
-                    self.sistema.actualizar_atencion(atencion.codigo, diagnostico)
+                    self.sistema.actualizar_atencion(atencion.codigo, diagnostico, recetas)
                 else:
                     atencion_nueva = AtencionMedica(
                         self.sistema.generar_codigo_atencion(),
                         cita,
                         diagnostico,
                         "Finalizada",
+                        recetas,
                     )
                     self.sistema.registrar_atencion(atencion_nueva)
                 messagebox.showinfo(
                     "Atención guardada",
-                    "La opinión médica se guardó y la cita quedó marcada como atendida.",
-                    parent=ventana,
+                    "La opinión médica y las recetas se guardaron; la cita quedó marcada como atendida.",
+                    parent=self.ventana,
                 )
-                ventana.destroy()
                 self.mostrar_agenda()
             except (TypeError, ValueError) as error:
-                messagebox.showerror("No se pudo guardar", str(error), parent=ventana)
+                messagebox.showerror("No se pudo guardar", str(error), parent=self.ventana)
 
         self._boton(
             contenido,
             "← Volver",
-            ventana.destroy,
+            self.mostrar_agenda,
             COLOR_PANEL,
         ).pack(pady=(4, 6))
-        self._boton(contenido, "Guardar opinión", guardar).pack(pady=(0, 18))
+        self._boton(contenido, "Guardar opinión y receta", guardar).pack(pady=(0, 18))
 
     def marcar_no_atendida(self, cita):
         if not messagebox.askyesno(
@@ -496,16 +590,12 @@ class PantallaProfesional:
             messagebox.showerror("No se pudo cancelar", str(error))
 
     def reprogramar(self, cita):
-        ventana = tk.Toplevel(self.ventana)
-        ventana.title("Reprogramar cita")
-        ventana.configure(bg=COLOR_FONDO)
-        ventana.geometry("560x500")
-        ventana.minsize(480, 400)
-        ventana.transient(self.ventana)
-        ventana.grab_set()
-        vista = VistaDesplazable(ventana, COLOR_FONDO)
-        vista.pack(fill="both", expand=True)
-        contenido = vista.contenido
+        self._pantalla_en_edicion = True
+        contenido = self._marco_base(
+            "Reprogramar cita",
+            f"Nueva fecha y horario · {cita.paciente.nombre}",
+            volver=self.mostrar_agenda,
+        )
         tk.Label(
             contenido,
             text=f"Nueva fecha y horario · {cita.paciente.nombre}",
@@ -561,15 +651,14 @@ class PantallaProfesional:
                     entrada_fecha.get(),
                     hora_var.get(),
                 )
-                ventana.destroy()
                 self.mostrar_agenda()
             except ValueError as error:
-                messagebox.showerror("No se pudo reprogramar", str(error), parent=ventana)
+                messagebox.showerror("No se pudo reprogramar", str(error), parent=self.ventana)
 
         self._boton(
             contenido,
             "← Volver",
-            ventana.destroy,
+            self.mostrar_agenda,
             COLOR_PANEL,
         ).pack(pady=(2, 6))
         self._boton(contenido, "Guardar nueva fecha", guardar).pack(pady=(0, 18))

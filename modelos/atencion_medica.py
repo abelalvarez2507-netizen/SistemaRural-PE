@@ -1,4 +1,5 @@
 from modelos.cita import Cita
+from modelos.medicamento_recetado import MedicamentoRecetado
 from servicios.validaciones import validar_codigo, validar_diagnostico
 
 
@@ -7,7 +8,7 @@ class AtencionMedica:
 
     ESTADOS_VALIDOS = {"Pendiente", "En proceso", "Finalizada"}
 
-    def __init__(self, codigo, cita, diagnostico, estado="Pendiente"):
+    def __init__(self, codigo, cita, diagnostico, estado="Pendiente", recetas=None):
         if cita is None or not isinstance(cita, Cita):
             raise ValueError("La atención debe estar asociada a una cita válida.")
 
@@ -15,6 +16,7 @@ class AtencionMedica:
         self._cita = cita
         self._diagnostico = validar_diagnostico(diagnostico)
         self.estado = estado
+        self.recetas = recetas or []
 
     @property
     def codigo(self):
@@ -43,6 +45,17 @@ class AtencionMedica:
     @diagnostico.setter
     def diagnostico(self, valor):
         self._diagnostico = validar_diagnostico(valor)
+
+    @property
+    def recetas(self):
+        return list(self._recetas)
+
+    @recetas.setter
+    def recetas(self, valores):
+        valores = list(valores or [])
+        if not all(isinstance(item, MedicamentoRecetado) for item in valores):
+            raise TypeError("Las recetas deben ser objetos MedicamentoRecetado.")
+        self._recetas = valores
 
     @property
     def estado(self):

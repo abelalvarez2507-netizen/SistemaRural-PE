@@ -4,8 +4,10 @@ from datetime import datetime
 
 from modelos.paciente import Paciente
 from modelos.personal_salud import PersonalSalud
+from modelos.personal_enfermeria import PersonalEnfermeria
 from modelos.cita import Cita
 from modelos.atencion_medica import AtencionMedica
+from modelos.medicamento_recetado import MedicamentoRecetado
 
 from servicios.sistema_salud import SistemaSalud
 from servicios.reportes import Reportes
@@ -23,6 +25,7 @@ from interfaz.estilos import (
     COLOR_ROJO_CLARO,
     COLOR_ROJO_OSCURO,
     COLOR_BLANCO,
+    COLOR_ERROR,
     COLOR_TEXTO,
     COLOR_GRIS_CLARO,
     COLOR_GRIS,
@@ -147,11 +150,16 @@ class VentanaPrincipal:
     def __init__(
         self,
         ventana,
-        pantalla_inicio=None
+        pantalla_inicio=None,
+        sesion=None,
     ):
+
+        if sesion is None or sesion.rol != "administrativa":
+            raise ValueError("Se requiere una sesión administrativa autenticada.")
 
         self.ventana = ventana
         self.pantalla_inicio = pantalla_inicio
+        self.sesion = sesion
 
         self._pantalla_principal = None
         self._pantalla_actual = None
@@ -166,8 +174,8 @@ class VentanaPrincipal:
         )
 
         self.ventana.minsize(
-            950,
-            680
+            720,
+            560
         )
 
         self.ventana.resizable(
@@ -466,7 +474,7 @@ class VentanaPrincipal:
 
         tk.Label(
             izquierda,
-            text="  |  PANEL ADMINISTRATIVO",
+            text=f"  |  PANEL ADMINISTRATIVO · {self.sesion.usuario}",
             font=FUENTE_NORMAL_BOLD,
             bg=COLOR_FONDO,
             fg=COLOR_GRIS_CLARO
@@ -671,7 +679,7 @@ class VentanaPrincipal:
 
         tk.Label(
             instrucciones_busqueda,
-            text="Código de paciente o profesional, o DNI de 8 dígitos.",
+            text="Código de paciente, profesional o enfermería, o DNI de 8 dígitos.",
             font=FUENTE_PEQUENA,
             bg=COLOR_PANEL,
             fg=COLOR_GRIS,
@@ -716,7 +724,7 @@ class VentanaPrincipal:
         self.configurar_limite_busqueda(
             entrada_busqueda_rapida,
             self.ventana,
-            maximo=10,
+            maximo=None,
         )
 
         mensaje_busqueda = tk.Label(
@@ -724,7 +732,7 @@ class VentanaPrincipal:
             text="",
             font=FUENTE_PEQUENA,
             bg=COLOR_FONDO,
-            fg=COLOR_ROJO,
+            fg=COLOR_ERROR,
             anchor="w",
         )
 
@@ -816,7 +824,7 @@ class VentanaPrincipal:
             if len(valor) < 2:
                 return "break"
 
-            if not self.validar_entrada_busqueda(valor, maximo=10):
+            if not self.validar_entrada_busqueda(valor):
                 mostrar_mensaje_busqueda(
                     "Usa únicamente letras, números, guion o guion bajo."
                 )
@@ -877,6 +885,9 @@ class VentanaPrincipal:
                     key=lambda cita: cita.fecha_hora,
                     reverse=True,
                 )
+                ventas_paciente = self.sistema.obtener_historial_paciente(
+                    paciente.codigo
+                ).get("ventas_medicamentos", [])
 
                 bloques.extend((
                     "FICHA DEL PACIENTE",
@@ -917,6 +928,23 @@ class VentanaPrincipal:
                             f"Diagnóstico: {atencion.diagnostico}",
                             f"Estado de la atención: {atencion.estado}",
                         ))
+                        if atencion.recetas:
+                            bloques.append("Medicamentos recetados:")
+                            bloques.extend(
+                                f"  • {receta.mostrar_informacion()}"
+                                for receta in atencion.recetas
+                            )
+
+                bloques.append("MEDICAMENTOS REGISTRADOS EN VENTA")
+                if not ventas_paciente:
+                    bloques.append("No hay ventas de medicamentos vinculadas.")
+                else:
+                    for venta in ventas_paciente:
+                        (_id, medicamento, lote, cantidad, _precio, total, codigo, vendedor, fecha_hora) = venta
+                        bloques.append(
+                            f"{fecha_hora} · {medicamento} · Lote {lote} · "
+                            f"{cantidad} unidad(es) · S/ {float(total):.2f} · Paciente {codigo}"
+                        )
 
                 bloques.extend((
                     "",
@@ -1025,7 +1053,7 @@ class VentanaPrincipal:
             valor = valor_busqueda_rapida.get().strip()
             habilitado = (
                 len(valor) >= 2
-                and self.validar_entrada_busqueda(valor, maximo=10)
+                and self.validar_entrada_busqueda(valor)
             )
             boton_buscar_rapido.configure(
                 state=(tk.NORMAL if habilitado else tk.DISABLED),
@@ -1432,7 +1460,11 @@ class VentanaPrincipal:
             ),
             (
                 "Profesionales registrados",
-                len(personal)
+                sum(not self._es_personal_enfermeria(p) for p in personal)
+            ),
+            (
+                "Personal de enfermería",
+                sum(self._es_personal_enfermeria(p) for p in personal)
             ),
             (
                 "Citas registradas",
@@ -1727,15 +1759,15 @@ class VentanaPrincipal:
                 "Administre el personal de salud "
                 "y consulte la actividad registrada."
             ),
-            len(personal),
+            sum(not self._es_personal_enfermeria(p) for p in personal),
             "profesionales registrados",
             "Gestionar profesionales",
             self.gestion_profesionales
         )
 
         crear_modulo(
+            1,
             0,
-            2,
             "📅",
             "GESTIÓN DE CITAS",
             (
@@ -1749,8 +1781,20 @@ class VentanaPrincipal:
         )
 
         crear_modulo(
-            1,
             0,
+            2,
+            "♧",
+            "GESTIÓN DE ENFERMERÍA",
+            "Registre, consulte y busque personal de enfermería.",
+            sum(self._es_personal_enfermeria(p) for p in personal),
+            "personas registradas",
+            "Gestionar enfermería",
+            self.gestion_enfermeria
+        )
+
+        crear_modulo(
+            1,
+            1,
             "🩺",
             "ATENCIONES MÉDICAS",
             (
@@ -1765,7 +1809,7 @@ class VentanaPrincipal:
 
         crear_modulo(
             1,
-            1,
+            2,
             "📊",
             "REPORTES Y ESTADÍSTICAS",
             (
@@ -2284,6 +2328,10 @@ class VentanaPrincipal:
 
         return ventana
 
+    @staticmethod
+    def _es_personal_enfermeria(personal):
+        return "enfermer" in str(getattr(personal, "especialidad", "")).casefold()
+
     # =========================================================
     # GESTIÓN DE PACIENTES
     # =========================================================
@@ -2328,30 +2376,29 @@ class VentanaPrincipal:
 
         self._crear_menu_gestion(
             "Gestión de profesionales",
-            (
-                "Administre el personal de salud "
-                "y consulte su actividad registrada."
-            ),
+            "Administre profesionales de salud y consulte su actividad registrada.",
             [
-                (
-                    "Registrar profesional",
-                    self.registrar_personal
-                ),
-                (
-                    "Ver profesionales",
-                    self.ver_personal
-                ),
-                (
-                    "Buscar profesional",
-                    self.buscar_personal
-                ),
-                (
-                    "Historial de profesionales",
-                    self.historial_profesionales
-                ),
+                ("Registrar profesional", self.registrar_personal),
+                ("Ver profesionales", self.ver_personal),
+                ("Buscar profesional", self.buscar_personal),
+                ("Historial de profesionales", self.historial_profesionales),
             ],
             ancho=540,
             alto=520
+        )
+
+    def gestion_enfermeria(self):
+        """Agrupa el alta, consulta y búsqueda de personal de enfermería."""
+        self._crear_menu_gestion(
+            "Gestión de enfermería",
+            "Registre personal de enfermería y consulte sus datos registrados.",
+            [
+                ("Registrar personal", lambda: self.registrar_personal("enfermeria")),
+                ("Ver personal", lambda: self.ver_personal("enfermeria")),
+                ("Buscar personal", lambda: self.buscar_personal("enfermeria")),
+            ],
+            ancho=540,
+            alto=460,
         )
 
     # =========================================================
@@ -2546,14 +2593,14 @@ class VentanaPrincipal:
     def validar_entrada_busqueda(
         self,
         nuevo_valor,
-        maximo=10
+        maximo=None
     ):
         """Valida entradas de búsqueda sin permitir símbolos ni exceso."""
 
         if nuevo_valor == "":
             return True
 
-        return len(nuevo_valor) <= maximo and all(
+        return (maximo is None or len(nuevo_valor) <= maximo) and all(
             caracter.isalnum() or caracter in "-_"
             for caracter in nuevo_valor
         )
@@ -2566,9 +2613,9 @@ class VentanaPrincipal:
         self,
         entrada,
         ventana=None,
-        maximo=10
+        maximo=None
     ):
-        """Configura el límite de caracteres de un campo de búsqueda."""
+        """Configura la validación de un código o DNI de búsqueda."""
 
         registro = (
             ventana
@@ -2823,30 +2870,10 @@ class VentanaPrincipal:
     # =========================================================
 
     def generar_codigo_profesional(self):
+        return self.sistema.generar_codigo_personal("CMP")
 
-        personal = (
-            self.sistema.obtener_personal()
-        )
-
-        numero = 1
-
-        while True:
-
-            codigo = (
-                f"CMP{numero:03d}"
-            )
-
-            existe = any(
-                profesional.codigo_profesional
-                == codigo
-                for profesional in personal
-            )
-
-            if not existe:
-
-                return codigo
-
-            numero += 1
+    def generar_codigo_enfermeria(self):
+        return self.sistema.generar_codigo_personal("MTF")
 
     # =========================================================
     # VER PACIENTES
@@ -3071,7 +3098,8 @@ class VentanaPrincipal:
         self,
         titulo,
         etiqueta,
-        tipo_profesional=False
+        tipo_profesional=False,
+        categoria_personal="profesional",
     ):
         """Construye una búsqueda de pacientes/profesionales."""
 
@@ -3312,8 +3340,15 @@ class VentanaPrincipal:
                             )
                         )
 
+                    registros = [
+                        persona for persona in registros
+                        if self._es_personal_enfermeria(persona)
+                        == (categoria_personal == "enfermeria")
+                    ]
                     mensaje_vacio = (
-                        "No se encontró personal."
+                        "No se encontró personal de enfermería."
+                        if categoria_personal == "enfermeria"
+                        else "No se encontró profesional."
                     )
 
                 else:
@@ -3452,10 +3487,10 @@ class VentanaPrincipal:
     # VER PERSONAL
     # =========================================================
 
-    def ver_personal(self):
-
+    def ver_personal(self, categoria="profesional"):
+        personal_es_enfermeria = categoria == "enfermeria"
         ventana = self._crear_pantalla_interna(
-            "Personal de salud"
+            "Personal de enfermería" if personal_es_enfermeria else "Profesionales registrados"
         )
 
         texto = tk.Text(
@@ -3469,9 +3504,10 @@ class VentanaPrincipal:
             pady=10
         )
 
-        personal = (
-            self.sistema.obtener_personal()
-        )
+        personal = [
+            persona for persona in self.sistema.obtener_personal()
+            if self._es_personal_enfermeria(persona) == personal_es_enfermeria
+        ]
 
         if not personal:
 
@@ -3502,19 +3538,21 @@ class VentanaPrincipal:
     # REGISTRAR PERSONAL
     # =========================================================
 
-    def registrar_personal(self):
-
+    def registrar_personal(self, categoria="profesional"):
+        es_enfermeria = categoria == "enfermeria"
         ventana = self._crear_pantalla_interna(
-            "Registrar personal"
+            "Registrar personal de enfermería" if es_enfermeria else "Registrar profesional"
         )
 
         codigo_generado = (
-            self.generar_codigo_profesional()
+            self.generar_codigo_enfermeria()
+            if es_enfermeria
+            else self.generar_codigo_profesional()
         )
 
         tk.Label(
             ventana,
-            text="Código profesional:"
+            text="Código de enfermería:" if es_enfermeria else "Código profesional:",
         ).pack(
             pady=5
         )
@@ -3526,6 +3564,13 @@ class VentanaPrincipal:
         ).pack(
             pady=5
         )
+
+        tk.Label(
+            ventana,
+            text="Código médico de autorización (SALUDPRO):"
+        ).pack(pady=(12, 5))
+        entrada_codigo_medico = tk.Entry(ventana, width=35, show="*")
+        entrada_codigo_medico.pack()
 
         tk.Label(
             ventana,
@@ -3607,7 +3652,6 @@ class VentanaPrincipal:
 
         especialidades = [
             "Medicina General",
-            "Enfermería",
             "Obstetricia",
             "Odontología",
             "Psicología",
@@ -3615,20 +3659,14 @@ class VentanaPrincipal:
             "Medicina Familiar",
             "Urología",
             "Pediatría",
-            "Neurología"
+            "Neurología",
         ]
 
-        especialidad_var = tk.StringVar()
-
-        especialidad_var.set(
-            especialidades[0]
-        )
-
-        tk.OptionMenu(
-            ventana,
-            especialidad_var,
-            *especialidades
-        ).pack()
+        especialidad_var = tk.StringVar(value="Enfermería" if es_enfermeria else especialidades[0])
+        if es_enfermeria:
+            tk.Label(ventana, text="Enfermería").pack()
+        else:
+            tk.OptionMenu(ventana, especialidad_var, *especialidades).pack()
 
         def guardar():
 
@@ -3638,26 +3676,28 @@ class VentanaPrincipal:
                     entrada_dni.get()
                 )
 
-                profesional = PersonalSalud(
+                if not entrada_codigo_medico.get().strip():
+                    raise ValueError("Ingresa el código médico SALUDPRO para continuar.")
+                clase_personal = PersonalEnfermeria if es_enfermeria else PersonalSalud
+                profesional = clase_personal(
                     codigo_generado,
                     dni,
                     entrada_nombre.get(),
-                    int(
-                        entrada_edad.get()
-                    ),
-                    especialidad_var.get()
+                    int(entrada_edad.get()),
+                    especialidad_var.get(),
                 )
 
                 self.sistema.registrar_personal(
-                    profesional
+                    profesional,
+                    entrada_codigo_medico.get(),
                 )
 
                 messagebox.showinfo(
                     "Éxito",
                     (
-                        "Personal registrado correctamente.\n\n"
-                        f"Código asignado: "
-                        f"{codigo_generado}\n"
+                        ("Personal de enfermería" if es_enfermeria else "Profesional")
+                        + " registrado correctamente.\n\n"
+                        f"Código asignado: {codigo_generado}\n"
                         "DNI almacenado de forma protegida."
                     )
                 )
@@ -3687,13 +3727,13 @@ class VentanaPrincipal:
     # BUSCAR PERSONAL
     # =========================================================
 
-    def buscar_personal(self):
-        """Muestra la búsqueda de profesionales."""
-
+    def buscar_personal(self, categoria="profesional"):
+        es_enfermeria = categoria == "enfermeria"
         self._mostrar_busqueda_personas(
-            titulo="Buscar profesional",
-            etiqueta="Buscar profesional por:",
-            tipo_profesional=True
+            titulo="Buscar personal de enfermería" if es_enfermeria else "Buscar profesional",
+            etiqueta="Buscar personal por:" if es_enfermeria else "Buscar profesional por:",
+            tipo_profesional=True,
+            categoria_personal=categoria,
         )
 
     # =========================================================
@@ -4961,6 +5001,9 @@ class VentanaPrincipal:
                         == paciente.codigo
                     )
                 ]
+                ventas_medicamentos = self.sistema.obtener_historial_paciente(
+                    paciente.codigo
+                ).get("ventas_medicamentos", [])
 
                 # =================================================
                 # DATOS DEL PACIENTE
@@ -5194,10 +5237,28 @@ class VentanaPrincipal:
                             tk.END,
                             f"Estado: {atencion.estado}\n"
                         )
+                        if atencion.recetas:
+                            texto.insert(tk.END, "Medicamentos recetados:\n")
+                            for receta in atencion.recetas:
+                                texto.insert(tk.END, f"  • {receta.mostrar_informacion()}\n")
 
                         texto.insert(
                             tk.END,
                             "--------------------------------------------------\n"
+                        )
+
+                texto.insert(tk.END, "\nMEDICAMENTOS REGISTRADOS EN VENTA\n")
+                texto.insert(tk.END, "--------------------------------------------------\n")
+                if not ventas_medicamentos:
+                    texto.insert(tk.END, "No hay ventas de medicamentos vinculadas a este paciente.\n")
+                else:
+                    for venta in ventas_medicamentos:
+                        (_id, medicamento, lote, cantidad, _precio, total, codigo, vendedor, fecha_hora) = venta
+                        texto.insert(
+                            tk.END,
+                            f"{fecha_hora} · {medicamento} · Lote {lote} · "
+                            f"{cantidad} unidad(es) · S/ {float(total):.2f} · "
+                            f"Paciente {codigo} · Registró: {vendedor}\n",
                         )
 
                 texto.insert(
@@ -5304,15 +5365,16 @@ class VentanaPrincipal:
 
     def historial_profesionales(self):
 
-        personal = (
-            self.sistema.obtener_personal()
-        )
+        personal = [
+            p for p in self.sistema.obtener_personal()
+            if not self._es_personal_enfermeria(p)
+        ]
 
         if not personal:
 
             messagebox.showwarning(
                 "Aviso",
-                "No existe personal registrado."
+                "No existe personal profesional registrado."
             )
 
             return
@@ -6140,11 +6202,6 @@ class VentanaPrincipal:
 # =============================================================
 
 if __name__ == "__main__":
+    from main import main
 
-    ventana = tk.Tk()
-
-    aplicacion = VentanaPrincipal(
-        ventana
-    )
-
-    ventana.mainloop()
+    main()

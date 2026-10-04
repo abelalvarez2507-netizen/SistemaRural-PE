@@ -14,6 +14,7 @@ from interfaz.estilos import (
     COLOR_ROJO,
     COLOR_ROJO_CLARO,
     COLOR_BLANCO,
+    COLOR_ERROR,
     COLOR_TEXTO,
     COLOR_GRIS_CLARO,
     COLOR_GRIS,
@@ -31,17 +32,28 @@ class PantallaPaciente:
     def __init__(
         self,
         ventana,
-        pantalla_inicio
+        pantalla_inicio,
+        sesion,
     ):
+
+        if sesion is None or sesion.rol != "paciente":
+            raise ValueError("Se requiere una sesión autenticada de paciente.")
 
         self.ventana = ventana
         self.pantalla_inicio = pantalla_inicio
+        self.sesion = sesion
 
         # Sistema principal del portal.
         self.sistema = SistemaSalud()
 
         # Paciente autenticado durante la sesión.
-        self.paciente_actual = None
+        pacientes = self.sistema.buscar_paciente_por_codigo(
+            sesion.codigo_referencia or ""
+        )
+        if not pacientes:
+            self.sistema.cerrar()
+            raise ValueError("La cuenta ya no está vinculada a un paciente activo.")
+        self.paciente_actual = pacientes[0]
 
         # Pantalla actualmente mostrada dentro de la misma ventana.
         self.pantalla_actual = None
@@ -214,149 +226,24 @@ class PantallaPaciente:
             pady=(0, 20)
         )
 
-        # =====================================================
-        # PANEL DE IDENTIFICACIÓN
-        # =====================================================
-
-        panel_identificacion = tk.Frame(
-            contenedor,
-            bg=COLOR_PANEL
-        )
-
-        panel_identificacion.pack(
-            fill="x",
-            padx=80,
-            pady=10
-        )
-
+        # La autenticación ocurre antes de abrir este portal; no se permite
+        # cambiar a otro paciente desde una sesión ya iniciada.
+        panel_identificacion = tk.Frame(contenedor, bg=COLOR_PANEL, padx=24, pady=16)
+        panel_identificacion.pack(fill="x", padx=80, pady=10)
         tk.Label(
             panel_identificacion,
-            text="Identificación del paciente",
+            text="Sesión autenticada",
             font=FUENTE_SECCION,
             fg=COLOR_TEXTO,
-            bg=COLOR_PANEL
-        ).pack(
-            pady=(18, 8)
-        )
-
-        tk.Label(
-            panel_identificacion,
-            text=(
-                "El sistema reconoce automáticamente el DNI o el código "
-                "por su formato."
-            ),
-            font=("Arial", 10),
-            fg=COLOR_GRIS_CLARO,
-            bg=COLOR_PANEL
-        ).pack(
-            pady=(0, 10)
-        )
-
-        fila_dni = tk.Frame(
-            panel_identificacion,
-            bg=COLOR_PANEL
-        )
-
-        fila_dni.pack(
-            pady=(0, 15)
-        )
-
-        self.etiqueta_busqueda = tk.Label(
-            fila_dni,
-            text="Código o DNI:",
-            font=FUENTE_BOTON,
-            fg=COLOR_TEXTO,
-            bg=COLOR_PANEL
-        )
-        self.etiqueta_busqueda.pack(
-            side="left",
-            padx=(0, 8)
-        )
-
-        self.tipo_busqueda = tk.StringVar(
-            value="DNI"
-        )
-
-        self.campo_dni = tk.Entry(
-            fila_dni,
-            width=18,
-            font=("Arial", 12),
-            bg=COLOR_PANEL_CLARO,
-            fg=COLOR_TEXTO,
-            insertbackground=COLOR_TEXTO,
-            relief="flat",
-            bd=0,
-            justify="center"
-        )
-
-        self.campo_dni.pack(
-            side="left",
-            padx=5,
-            ipady=7
-        )
-
-        # DNI o código: la cantidad de caracteres depende del selector.
-        validacion_busqueda = self.ventana.register(
-            self._validar_busqueda_tecla
-        )
-
-        self.campo_dni.config(
-            validate="key",
-            validatecommand=(
-                validacion_busqueda,
-                "%P"
-            )
-        )
-
-        boton_ingresar = tk.Button(
-            fila_dni,
-            text="Ingresar",
-            font=FUENTE_BOTON,
-            bg=COLOR_ROJO,
-            fg=COLOR_BLANCO,
-            activebackground=COLOR_ROJO_CLARO,
-            activeforeground=COLOR_BLANCO,
-            relief="flat",
-            bd=0,
-            cursor="hand2",
-            padx=16,
-            pady=7,
-            command=self.autenticar_paciente
-        )
-
-        boton_ingresar.pack(
-            side="left",
-            padx=(10, 0)
-        )
-
-        boton_ingresar.bind(
-            "<Enter>",
-            lambda evento: boton_ingresar.configure(
-                bg=COLOR_ROJO_CLARO
-            )
-        )
-
-        boton_ingresar.bind(
-            "<Leave>",
-            lambda evento: boton_ingresar.configure(
-                bg=COLOR_ROJO
-            )
-        )
-
-        tk.Label(
-            panel_identificacion,
-            text="Por seguridad, el DNI no se muestra por completo después de la autenticación.",
-            font=("Arial", 9),
-            fg=COLOR_GRIS,
             bg=COLOR_PANEL,
-            justify="center",
-            wraplength=500,
-        ).pack(pady=(0, 12))
-
-        self.campo_dni.bind(
-            "<Return>",
-            lambda evento: self.autenticar_paciente()
-        )
+        ).pack(pady=(0, 5))
+        tk.Label(
+            panel_identificacion,
+            text=f"{self.paciente_actual.nombre}  ·  Cuenta {self.sesion.usuario}",
+            font=("Arial", 11),
+            fg=COLOR_GRIS_CLARO,
+            bg=COLOR_PANEL,
+        ).pack()
 
         # =====================================================
         # ESTADO DE SESIÓN
@@ -364,7 +251,7 @@ class PantallaPaciente:
 
         self.etiqueta_sesion = tk.Label(
             contenedor,
-            text="No hay paciente autenticado.",
+            text=f"Acceso activo para {self.paciente_actual.nombre}.",
             font=("Arial", 10, "bold"),
             fg=COLOR_GRIS_CLARO,
             bg=COLOR_FONDO
@@ -577,8 +464,7 @@ class PantallaPaciente:
         if nuevo_valor == "":
             return True
         return (
-            len(nuevo_valor) <= 10
-            and all(
+            all(
                 caracter.isalnum() or caracter in "-_"
                 for caracter in nuevo_valor
             )
@@ -700,6 +586,11 @@ class PantallaPaciente:
 
     def autenticar_paciente(self):
 
+        # La identidad se valida en el modal de acceso, antes de abrir el
+        # portal. La sesión actual no puede cambiarse desde esta pantalla.
+        if self.paciente_actual is not None:
+            return
+
         valor = self.campo_dni.get().strip()
 
         if not valor:
@@ -729,7 +620,7 @@ class PantallaPaciente:
 
                 messagebox.showerror(
                     "Código inválido",
-                    "El código debe tener entre 2 y 10 letras, números, "
+                    "El código debe tener 2 o más letras, números, "
                     "guiones o guiones bajos."
                 )
 
@@ -757,7 +648,7 @@ class PantallaPaciente:
                     "No se encontró un paciente con ese "
                     f"{tipo_nombre}."
                 ),
-                fg=COLOR_ROJO_CLARO
+                fg=COLOR_ERROR
             )
 
             messagebox.showerror(
@@ -1217,6 +1108,7 @@ class PantallaPaciente:
 
         citas = historial["citas"]
         atenciones = historial["atenciones"]
+        ventas_medicamentos = historial.get("ventas_medicamentos", [])
 
         texto.insert(
             tk.END,
@@ -1301,9 +1193,27 @@ class PantallaPaciente:
                     f"Estado: {atencion.estado}\n"
                 )
 
+                if atencion.recetas:
+                    texto.insert(tk.END, "Medicamentos recetados:\n")
+                    for receta in atencion.recetas:
+                        texto.insert(tk.END, f"  • {receta.mostrar_informacion()}\n")
+
                 texto.insert(
                     tk.END,
                     "\n"
+                )
+
+        texto.insert(tk.END, "=== MEDICAMENTOS REGISTRADOS EN VENTA ===\n\n")
+        if not ventas_medicamentos:
+            texto.insert(tk.END, "No hay medicamentos de venta vinculados a tu historial.\n")
+        else:
+            for venta in ventas_medicamentos:
+                (_id, medicamento, lote, cantidad, _precio, total, codigo, vendedor, fecha_hora) = venta
+                texto.insert(
+                    tk.END,
+                    f"{fecha_hora} · {medicamento} · Lote {lote} · "
+                    f"{cantidad} unidad(es) · S/ {float(total):.2f} · "
+                    f"Paciente {codigo}\n",
                 )
 
         texto.configure(

@@ -5,7 +5,7 @@ import unicodedata
 from datetime import datetime
 
 
-PATRON_CODIGO = re.compile(r"^[A-Za-z0-9_-]{2,10}$")
+PATRON_CODIGO = re.compile(r"^[A-Za-z0-9_-]{2,}$")
 
 
 def texto_requerido(valor, campo, maximo=200):
@@ -87,14 +87,16 @@ def validar_dni(valor):
 
 
 def validar_codigo(valor, campo="El código"):
-    """Valida códigos internos alfanuméricos."""
-    codigo = texto_requerido(valor, campo, 10)
-
+    """Valida códigos internos sin limitar la cantidad de dígitos."""
+    if valor is None:
+        raise ValueError(f"{campo} es obligatorio.")
+    codigo = str(valor).strip()
+    if not codigo:
+        raise ValueError(f"{campo} no puede estar vacío.")
     if not PATRON_CODIGO.fullmatch(codigo):
         raise ValueError(
-            f"{campo} debe contener entre 2 y 10 caracteres alfanuméricos, guion o guion bajo."
+            f"{campo} debe contener al menos 2 caracteres alfanuméricos, guion o guion bajo."
         )
-
     return codigo
 
 
