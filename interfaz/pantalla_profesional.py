@@ -1,3 +1,4 @@
+from datetime import date
 import tkinter as tk
 from tkinter import messagebox
 
@@ -51,6 +52,7 @@ class PantallaProfesional:
         self.profesional_actual = profesionales[0]
         self._temporizador = None
         self._pantalla_en_edicion = False
+        self._vista_actual = "agenda"
         self.ventana.title("SaluPro - Portal del Profesional")
         self.ventana.configure(bg=COLOR_FONDO)
         self.mostrar_agenda()
@@ -223,6 +225,7 @@ class PantallaProfesional:
 
     def mostrar_agenda(self):
         self._pantalla_en_edicion = False
+        self._vista_actual = "agenda"
         profesional = self.profesional_actual
         self.sistema.actualizar_citas_vencidas()
         contenedor = self._marco_base(
@@ -232,24 +235,35 @@ class PantallaProfesional:
         citas = sorted(
             [
                 cita
-                for cita in self.sistema.obtener_citas()
-                if cita.profesional.codigo_profesional
-                == profesional.codigo_profesional
+                for cita in self._citas_para_profesional()
+                if not self._derivada_a_otro(cita)
+                and not (
+                    self._atencion_de(cita)
+                    and self._atencion_de(cita).estado == "Finalizada"
+                )
+                and (
+                    cita.estado not in {"Atendida", "No atendida", "Cancelada"}
+                    or self._derivada_a_actual(cita)
+                )
             ],
             key=lambda cita: cita.fecha_hora,
         )
-        pendientes = [
-            cita
-            for cita in citas
-            if cita.estado in {"Pendiente", "Reprogramada"}
-        ]
         tk.Label(
             contenedor,
-            text=f"Citas pendientes: {len(pendientes)}",
+            text=f"Atenciones activas: {len(citas)}",
             font=FUENTE_SECCION,
             fg=COLOR_ROJO_CLARO,
             bg=COLOR_FONDO,
         ).pack(anchor="w", pady=(6, 12))
+
+        accesos = tk.Frame(contenedor, bg=COLOR_FONDO)
+        accesos.pack(fill="x", pady=(0, 12))
+        self._boton(
+            accesos, "Atenciones de hoy", self.mostrar_atenciones_hoy, COLOR_PANEL
+        ).pack(side="left", padx=(0, 8))
+        self._boton(
+            accesos, "Historial y derivaciones", self.mostrar_historial, COLOR_PANEL
+        ).pack(side="left")
 
         agenda = tk.Frame(contenedor, bg=COLOR_FONDO)
         agenda.pack(fill="both", expand=True)
@@ -258,6 +272,7 @@ class PantallaProfesional:
             bg=COLOR_FONDO,
             highlightthickness=0,
             yscrollincrement=PASO_FINO,
+            height=640,
         )
         barra = tk.Scrollbar(
             agenda, orient="vertical", command=comando_barra(canvas)
@@ -282,7 +297,7 @@ class PantallaProfesional:
         if not citas:
             tk.Label(
                 contenido,
-                text="No tienes citas registradas.",
+                text="No tienes atenciones activas asignadas.",
                 font=FUENTE_SUBTITULO,
                 fg=COLOR_GRIS,
                 bg=COLOR_FONDO,
@@ -293,14 +308,14 @@ class PantallaProfesional:
                 bg=COLOR_PANEL,
                 highlightbackground=COLOR_PANEL_CLARO,
                 highlightthickness=1,
-                padx=16,
-                pady=12,
+                padx=22,
+                pady=18,
             )
             tarjeta.pack(fill="x", pady=6, padx=4)
             tk.Label(
                 tarjeta,
                 text=f"{cita.fecha}   ·   {cita.hora}",
-                font=FUENTE_SECCION,
+                font=("Arial", 16, "bold"),
                 fg=COLOR_ROJO_CLARO,
                 bg=COLOR_PANEL,
             ).pack(anchor="w")
@@ -310,7 +325,7 @@ class PantallaProfesional:
                     f"Paciente: {cita.paciente.nombre}   ·   "
                     f"Motivo: {cita.motivo}   ·   Estado: {cita.estado}"
                 ),
-                font=FUENTE_BOTON,
+                font=("Arial", 12),
                 fg=COLOR_TEXTO,
                 bg=COLOR_PANEL,
                 wraplength=900,
@@ -318,30 +333,35 @@ class PantallaProfesional:
             ).pack(anchor="w", pady=(5, 8))
             acciones = tk.Frame(tarjeta, bg=COLOR_PANEL)
             acciones.pack(anchor="w")
-            if cita.estado in {"Pendiente", "Reprogramada"}:
+            if self._derivada_a_actual(cita):
+                self._boton(
+                    acciones,
+                    "Registrar veredicto final",
+                    lambda item=cita: self.editar_atencion(item),
+                ).pack(side="left", padx=(0, 6))
+            elif (
+                cita.profesional.codigo_profesional
+                == profesional.codigo_profesional
+                and cita.estado in {"Pendiente", "Reprogramada", "En proceso"}
+            ):
                 self._boton(
                     acciones,
                     "Registrar / editar opinión médica",
                     lambda item=cita: self.editar_atencion(item),
                 ).pack(side="left", padx=(0, 6))
-                self._boton(
-                    acciones,
-                    "Reprogramar",
-                    lambda item=cita: self.reprogramar(item),
-                    COLOR_PANEL_CLARO,
-                ).pack(side="left", padx=6)
-                self._boton(
-                    acciones,
-                    "Cancelar",
-                    lambda item=cita: self.cancelar(item),
-                    COLOR_PANEL_CLARO,
-                ).pack(side="left", padx=6)
-                self._boton(
-                    acciones,
-                    "No atendida",
-                    lambda item=cita: self.marcar_no_atendida(item),
-                    COLOR_PANEL_CLARO,
-                ).pack(side="left", padx=6)
+                if cita.estado in {"Pendiente", "Reprogramada"}:
+                    self._boton(
+                        acciones,
+                        "Reprogramar",
+                        lambda item=cita: self.reprogramar(item),
+                        COLOR_PANEL_CLARO,
+                    ).pack(side="left", padx=6)
+                    self._boton(
+                        acciones,
+                        "Cancelar",
+                        lambda item=cita: self.cancelar(item),
+                        COLOR_PANEL_CLARO,
+                    ).pack(side="left", padx=6)
             else:
                 atencion = self._atencion_de(cita)
                 if atencion:
@@ -352,9 +372,24 @@ class PantallaProfesional:
                         COLOR_PANEL_CLARO,
                     ).pack(side="left")
 
+            atencion = self._atencion_de(cita)
+            if atencion and self._derivada_a_actual(cita):
+                tk.Label(
+                    tarjeta,
+                    text=(
+                        "Informe remitente: "
+                        f"{atencion.informe_derivacion or atencion.diagnostico}"
+                    ),
+                    font=("Arial", 10),
+                    fg=COLOR_GRIS,
+                    bg=COLOR_PANEL,
+                    wraplength=1050,
+                    justify="left",
+                ).pack(anchor="w", pady=(10, 0))
+
         tk.Label(
             contenedor,
-            text="Agenda por fecha y horario. Los turnos duran 30 minutos, de 07:00 a 18:00; el último comienza a las 17:30.",
+            text="Los turnos duran 30 minutos. Al iniciar pasan a En proceso; una derivación permanece abierta hasta el veredicto final.",
             font=("Arial", 9),
             fg=COLOR_GRIS,
             bg=COLOR_FONDO,
@@ -366,12 +401,217 @@ class PantallaProfesional:
                 pass
         self._temporizador = self.ventana.after(60000, self._actualizar_si_activo)
 
+    def _citas_para_profesional(self):
+        codigo = self.profesional_actual.codigo_profesional
+        atenciones = {
+            atencion.cita.codigo: atencion
+            for atencion in self.sistema.obtener_atenciones()
+        }
+        return [
+            cita
+            for cita in self.sistema.obtener_citas()
+            if cita.profesional.codigo_profesional == codigo
+            or (
+                atenciones.get(cita.codigo)
+                and atenciones[cita.codigo].profesional_derivado
+                and atenciones[cita.codigo].profesional_derivado.codigo_profesional
+                == codigo
+            )
+        ]
+
+    def _derivada_a_actual(self, cita):
+        atencion = self._atencion_de(cita)
+        return bool(
+            atencion
+            and atencion.profesional_derivado
+            and atencion.profesional_derivado.codigo_profesional
+            == self.profesional_actual.codigo_profesional
+        )
+
+    def _derivada_a_otro(self, cita):
+        atencion = self._atencion_de(cita)
+        return bool(
+            atencion
+            and atencion.profesional_derivado
+            and cita.profesional.codigo_profesional
+            == self.profesional_actual.codigo_profesional
+            and atencion.profesional_derivado.codigo_profesional
+            != self.profesional_actual.codigo_profesional
+        )
+
+    def _tarjeta_cita_profesional(self, padre, cita, permitir_edicion=False):
+        atencion = self._atencion_de(cita)
+        recibida = self._derivada_a_actual(cita)
+        transferida = self._derivada_a_otro(cita)
+        tarjeta = tk.Frame(
+            padre,
+            bg=COLOR_PANEL,
+            highlightbackground=COLOR_PANEL_CLARO,
+            highlightthickness=1,
+            padx=20,
+            pady=16,
+        )
+        tarjeta.pack(fill="x", pady=7, padx=4)
+        tk.Label(
+            tarjeta,
+            text=f"{cita.fecha}   ·   {cita.hora}",
+            font=("Arial", 15, "bold"),
+            fg=COLOR_ROJO_CLARO,
+            bg=COLOR_PANEL,
+        ).pack(anchor="w")
+        tk.Label(
+            tarjeta,
+            text=(
+                f"Paciente: {cita.paciente.nombre}   ·   Motivo: {cita.motivo}"
+            ),
+            font=("Arial", 12),
+            fg=COLOR_TEXTO,
+            bg=COLOR_PANEL,
+            wraplength=1050,
+            justify="left",
+        ).pack(anchor="w", pady=(6, 4))
+
+        estado = (
+            "Derivación recibida · en espera de veredicto"
+            if recibida and atencion and atencion.estado != "Finalizada"
+            else f"Atención: {atencion.estado}"
+            if atencion
+            else f"Cita: {cita.estado}"
+        )
+        if transferida and atencion:
+            estado = f"Derivada a {atencion.profesional_derivado.nombre} · {atencion.estado}"
+        tk.Label(
+            tarjeta,
+            text=estado,
+            font=("Arial", 10, "bold"),
+            fg=COLOR_ROJO if recibida or transferida else COLOR_GRIS,
+            bg=COLOR_PANEL,
+        ).pack(anchor="w", pady=(0, 6))
+
+        if atencion and atencion.informe_derivacion:
+            tk.Label(
+                tarjeta,
+                text=f"Informe remitente: {atencion.informe_derivacion}",
+                font=("Arial", 10),
+                fg=COLOR_GRIS,
+                bg=COLOR_PANEL,
+                wraplength=1050,
+                justify="left",
+            ).pack(anchor="w", pady=(2, 4))
+        if atencion and atencion.diagnostico != atencion.informe_derivacion:
+            tk.Label(
+                tarjeta,
+                text=f"Veredicto / diagnóstico: {atencion.diagnostico}",
+                font=("Arial", 11),
+                fg=COLOR_TEXTO,
+                bg=COLOR_PANEL,
+                wraplength=1050,
+                justify="left",
+            ).pack(anchor="w", pady=(2, 6))
+
+        if (
+            permitir_edicion
+            and not transferida
+            and cita.estado in {"Pendiente", "Reprogramada", "En proceso"}
+            and not (atencion and atencion.estado == "Finalizada")
+        ):
+            acciones = tk.Frame(tarjeta, bg=COLOR_PANEL)
+            acciones.pack(anchor="w", pady=(8, 0))
+            if recibida:
+                self._boton(
+                    acciones,
+                    "Registrar veredicto final",
+                    lambda item=cita: self.editar_atencion(item),
+                ).pack(side="left")
+            elif cita.profesional.codigo_profesional == self.profesional_actual.codigo_profesional:
+                self._boton(
+                    acciones,
+                    "Registrar / editar opinión médica",
+                    lambda item=cita: self.editar_atencion(item),
+                ).pack(side="left", padx=(0, 7))
+                if cita.estado in {"Pendiente", "Reprogramada"}:
+                    self._boton(
+                        acciones,
+                        "Reprogramar",
+                        lambda item=cita: self.reprogramar(item),
+                        COLOR_PANEL,
+                    ).pack(side="left", padx=4)
+                    self._boton(
+                        acciones,
+                        "Cancelar",
+                        lambda item=cita: self.cancelar(item),
+                        COLOR_PANEL,
+                    ).pack(side="left", padx=4)
+
+    def mostrar_atenciones_hoy(self):
+        self._pantalla_en_edicion = False
+        self._vista_actual = "hoy"
+        self.sistema.actualizar_citas_vencidas()
+        hoy = date.today().strftime("%d/%m/%Y")
+        contenido = self._marco_base(
+            "Atenciones de hoy",
+            f"Agenda y atenciones del {hoy} · {self.profesional_actual.nombre}",
+            volver=self.mostrar_agenda,
+        )
+        citas = sorted(
+            [
+                cita for cita in self._citas_para_profesional()
+                if cita.fecha == hoy and not self._derivada_a_otro(cita)
+            ],
+            key=lambda cita: cita.fecha_hora,
+        )
+        if not citas:
+            tk.Label(
+                contenido,
+                text="No tienes atenciones registradas para hoy.",
+                font=FUENTE_SUBTITULO,
+                fg=COLOR_GRIS,
+                bg=COLOR_FONDO,
+            ).pack(anchor="w", pady=20)
+        for cita in citas:
+            self._tarjeta_cita_profesional(contenido, cita, permitir_edicion=True)
+
+    def mostrar_historial(self):
+        self._pantalla_en_edicion = False
+        self._vista_actual = "historial"
+        self.sistema.actualizar_citas_vencidas()
+        contenido = self._marco_base(
+            "Historial y derivaciones",
+            "Atenciones finalizadas y pacientes remitidos a otro profesional.",
+            volver=self.mostrar_agenda,
+        )
+        citas = []
+        for cita in self._citas_para_profesional():
+            atencion = self._atencion_de(cita)
+            if (
+                self._derivada_a_otro(cita)
+                or (atencion and atencion.estado == "Finalizada")
+                or cita.estado in {"Atendida", "No atendida", "Cancelada"}
+            ):
+                citas.append(cita)
+        citas.sort(key=lambda cita: cita.fecha_hora, reverse=True)
+        if not citas:
+            tk.Label(
+                contenido,
+                text="Todavía no hay atenciones en el historial.",
+                font=FUENTE_SUBTITULO,
+                fg=COLOR_GRIS,
+                bg=COLOR_FONDO,
+            ).pack(anchor="w", pady=20)
+        for cita in citas:
+            self._tarjeta_cita_profesional(contenido, cita)
+
     def _actualizar_si_activo(self):
         if self.profesional_actual is not None:
             try:
                 vencidas = self.sistema.actualizar_citas_vencidas()
                 if vencidas and not self._pantalla_en_edicion:
-                    self.mostrar_agenda()
+                    if self._vista_actual == "hoy":
+                        self.mostrar_atenciones_hoy()
+                    elif self._vista_actual == "historial":
+                        self.mostrar_historial()
+                    else:
+                        self.mostrar_agenda()
                 self._temporizador = self.ventana.after(
                     60000,
                     self._actualizar_si_activo,
@@ -383,7 +623,7 @@ class PantallaProfesional:
     def _enlazar_rueda(canvas, contenedor):
         def desplazar(evento):
             resultado = desplazar_por_evento(canvas, evento)
-            return None if resultado is None else "break"
+            return "break" if resultado else None
 
         def enlazar(widget):
             try:
@@ -422,6 +662,25 @@ class PantallaProfesional:
             fg=COLOR_TEXTO,
             bg=COLOR_FONDO,
         ).pack(padx=22, pady=(18, 10))
+        if atencion and self._derivada_a_actual(cita):
+            marco_informe = tk.Frame(contenido, bg=COLOR_PANEL, padx=14, pady=12)
+            marco_informe.pack(fill="x", padx=22, pady=(0, 10))
+            tk.Label(
+                marco_informe,
+                text="Informe del profesional remitente",
+                font=("Arial", 16, "bold"),
+                fg=COLOR_TEXTO,
+                bg=COLOR_PANEL,
+            ).pack(anchor="w")
+            tk.Label(
+                marco_informe,
+                text=atencion.informe_derivacion or atencion.diagnostico,
+                font=("Arial", 12),
+                fg=COLOR_TEXTO,
+                bg=COLOR_PANEL,
+                wraplength=1000,
+                justify="left",
+            ).pack(anchor="w", pady=(4, 0))
         tk.Label(
             contenido,
             text="Opinión médica / diagnóstico:",
@@ -440,7 +699,7 @@ class PantallaProfesional:
             relief="flat",
         )
         texto.pack(fill="x", padx=22, pady=8)
-        if atencion:
+        if atencion and not self._derivada_a_actual(cita):
             texto.insert("1.0", atencion.diagnostico)
 
         es_medico_general = (
@@ -455,14 +714,14 @@ class PantallaProfesional:
             tk.Label(
                 panel_derivacion,
                 text="Derivar al profesional adecuado (obligatorio)",
-                font=FUENTE_SECCION,
+                font=("Arial", 16, "bold"),
                 fg=COLOR_TEXTO,
                 bg=COLOR_PANEL,
             ).pack(anchor="w")
             tk.Label(
                 panel_derivacion,
                 text="Selecciona al especialista que continuará la atención. La derivación quedará en el historial del paciente.",
-                font=FUENTE_BOTON,
+                font=("Arial", 12),
                 fg=COLOR_GRIS,
                 bg=COLOR_PANEL,
                 wraplength=760,
@@ -630,13 +889,14 @@ class PantallaProfesional:
                         diagnostico,
                         recetas,
                         profesional_derivado,
+                        profesional_autor=self.profesional_actual,
                     )
                 else:
                     atencion_nueva = AtencionMedica(
                         self.sistema.generar_codigo_atencion(),
                         cita,
                         diagnostico,
-                        "Finalizada",
+                        "En proceso" if profesional_derivado else "Finalizada",
                         recetas,
                         profesional_derivado,
                     )
@@ -644,8 +904,8 @@ class PantallaProfesional:
                 messagebox.showinfo(
                     "Atención guardada",
                     (
-                        "La opinión médica, la derivación y las recetas se guardaron; "
-                        "la cita quedó marcada como atendida."
+                        "El informe y la derivación se guardaron. La atención sigue "
+                        "en proceso en la agenda del profesional derivado."
                         if profesional_derivado
                         else "La opinión médica y las recetas se guardaron; "
                         "la cita quedó marcada como atendida."

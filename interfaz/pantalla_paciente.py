@@ -1147,7 +1147,7 @@ class PantallaPaciente:
 
             texto.insert(
                 tk.END,
-                "No existen atenciones finalizadas.\n"
+                "No hay atenciones finalizadas ni derivaciones en curso.\n"
             )
 
         else:
@@ -1171,6 +1171,15 @@ class PantallaPaciente:
                         f"{atencion.diagnostico}\n"
                     )
                 )
+
+                if (
+                    atencion.informe_derivacion
+                    and atencion.informe_derivacion != atencion.diagnostico
+                ):
+                    texto.insert(
+                        tk.END,
+                        f"Informe de derivación: {atencion.informe_derivacion}\n",
+                    )
 
                 if atencion.profesional_derivado:
                     texto.insert(

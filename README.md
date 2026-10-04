@@ -31,18 +31,25 @@ Tkinter para la interfaz gráfica y SQLite para guardar la información.
   con descuento automático del stock. El formulario ofrece cuatro nombres de
   medicamento y 40 principios activos; al elegir Paracetamol, Ibuprofeno,
   Amoxicilina o Loratadina, completa el principio activo correspondiente.
-  La fecha se ingresa como DD/MM/AAAA y el lote se genera como
-  `lot-DDMMYYYY-b` a partir de la fecha de fabricación. No se aceptan fechas de
-  fabricación futuras ni vencimientos anteriores al día actual. Cada venta
-  queda vinculada al código del paciente y guarda el precio, la cantidad, el
-  usuario responsable y su fecha y hora.
+  El número de lote se escribe directamente; se solicita la fecha de
+  vencimiento en formato DD/MM/AAAA y no se aceptan vencimientos anteriores al
+  día actual. Cada venta queda vinculada al código del paciente y guarda el
+  precio, la cantidad, el usuario responsable y su fecha y hora.
 - Los campos de fecha aceptan ocho dígitos y colocan automáticamente las barras
   en formato DD/MM/AAAA.
 - Las citas de pacientes se asignan aleatoriamente a un médico general disponible;
   si ninguno está libre en el horario elegido, se asigna otro profesional médico
   disponible. El profesional asignado se muestra al confirmar la cita.
 - Al guardar el diagnóstico, los médicos generales deben seleccionar al especialista
-  que recibirá la derivación. La derivación se conserva en el historial clínico.
+  que recibirá la derivación. El paciente aparece en la agenda del profesional
+  receptor y el informe remitente se conserva en el historial clínico.
+- El profesional cuenta con vistas separadas para sus atenciones de hoy y su
+  historial de atenciones finalizadas o derivadas.
+- Los turnos pasan automáticamente a «En proceso» al comenzar. Al finalizar el
+  turno sin opinión médica o sin derivación se marcan «No atendida»; las derivaciones permanecen
+  «En proceso» hasta que el profesional receptor registra el veredicto final.
+- La administración puede consultar el historial de ventas de farmacia dentro
+  de Gestión de enfermería.
 - Recetas por atención médica con medicamento, duración en días y frecuencia;
   aparecen junto con las ventas vinculadas en el historial clínico del paciente.
 - Aceptación obligatoria de los términos y condiciones al crear una cuenta;

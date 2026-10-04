@@ -15,6 +15,7 @@ class Cita:
 
     ESTADOS_VALIDOS = {
         "Pendiente",
+        "En proceso",
         "Atendida",
         "Reprogramada",
         "No atendida",
@@ -97,7 +98,7 @@ class Cita:
             valor = "Reprogramada"
         if valor not in self.ESTADOS_VALIDOS:
             raise ValueError(
-                "Estado inválido. Use: Pendiente, Atendida, Reprogramada, "
+                "Estado inválido. Use: Pendiente, En proceso, Atendida, Reprogramada, "
                 "No atendida o Cancelada."
             )
         self._estado = valor

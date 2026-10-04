@@ -7,7 +7,7 @@ from servicios.validaciones import validar_codigo, validar_diagnostico
 class AtencionMedica:
     """Representa la atención clínica asociada a una cita."""
 
-    ESTADOS_VALIDOS = {"Pendiente", "En proceso", "Finalizada"}
+    ESTADOS_VALIDOS = {"Pendiente", "En proceso", "Finalizada", "No atendida"}
 
     def __init__(
         self,
@@ -17,6 +17,7 @@ class AtencionMedica:
         estado="Pendiente",
         recetas=None,
         profesional_derivado=None,
+        informe_derivacion="",
     ):
         if cita is None or not isinstance(cita, Cita):
             raise ValueError("La atención debe estar asociada a una cita válida.")
@@ -27,6 +28,9 @@ class AtencionMedica:
         self.estado = estado
         self.recetas = recetas or []
         self.profesional_derivado = profesional_derivado
+        self.informe_derivacion = informe_derivacion or (
+            self.diagnostico if profesional_derivado else ""
+        )
 
     @property
     def codigo(self):
@@ -75,7 +79,7 @@ class AtencionMedica:
     def estado(self, valor):
         if valor not in self.ESTADOS_VALIDOS:
             raise ValueError(
-                "Estado inválido. Use: Pendiente, En proceso o Finalizada."
+                "Estado inválido. Use: Pendiente, En proceso, Finalizada o No atendida."
             )
         self._estado = valor
 
@@ -94,6 +98,14 @@ class AtencionMedica:
             raise ValueError("La derivación debe dirigirse a otro profesional médico.")
         self._profesional_derivado = valor
 
+    @property
+    def informe_derivacion(self):
+        return self._informe_derivacion
+
+    @informe_derivacion.setter
+    def informe_derivacion(self, valor):
+        self._informe_derivacion = str(valor or "").strip()
+
     def mostrar_informacion(self):
         informacion = (
             f"Atención: {self.codigo} | "
@@ -109,4 +121,6 @@ class AtencionMedica:
                 f" | Derivación: {self.profesional_derivado.nombre} "
                 f"({self.profesional_derivado.especialidad})"
             )
+        if self.informe_derivacion and self.informe_derivacion != self.diagnostico:
+            informacion += f" | Informe remitente: {self.informe_derivacion}"
         return informacion

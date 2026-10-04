@@ -83,7 +83,8 @@ class RepositorioSalud:
                 cita_codigo TEXT NOT NULL,
                 diagnostico TEXT NOT NULL,
                 estado TEXT NOT NULL,
-                profesional_derivado_codigo TEXT
+                profesional_derivado_codigo TEXT,
+                informe_derivacion TEXT NOT NULL DEFAULT ''
             )
             """
         )
@@ -302,6 +303,19 @@ class RepositorioSalud:
             cursor.execute(
                 "ALTER TABLE atenciones ADD COLUMN profesional_derivado_codigo TEXT"
             )
+
+        if "informe_derivacion" not in columnas_atenciones:
+            cursor.execute(
+                "ALTER TABLE atenciones ADD COLUMN informe_derivacion TEXT NOT NULL DEFAULT ''"
+            )
+        cursor.execute(
+            """
+            UPDATE atenciones
+            SET informe_derivacion = diagnostico
+            WHERE profesional_derivado_codigo IS NOT NULL
+              AND informe_derivacion = ''
+            """
+        )
 
         # -----------------------------------------------------
         # MIGRACIÓN DE DNI DE PACIENTES
@@ -870,9 +884,10 @@ class RepositorioSalud:
                         cita_codigo,
                         diagnostico,
                         estado,
-                        profesional_derivado_codigo
+                        profesional_derivado_codigo,
+                        informe_derivacion
                     )
-                    VALUES (?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?)
                     """,
                     (
                         atencion.codigo,
@@ -884,6 +899,7 @@ class RepositorioSalud:
                             if atencion.profesional_derivado
                             else None
                         ),
+                        atencion.informe_derivacion,
                     )
                 )
                 self._guardar_recetas_en_transaccion(atencion.codigo, atencion.recetas)
@@ -945,7 +961,8 @@ class RepositorioSalud:
                 cita_codigo,
                 diagnostico,
                 estado,
-                profesional_derivado_codigo
+                profesional_derivado_codigo,
+                informe_derivacion
             FROM atenciones
             ORDER BY codigo
             """
@@ -976,15 +993,22 @@ class RepositorioSalud:
         codigo_atencion,
         diagnostico,
         profesional_derivado_codigo=None,
+        informe_derivacion=None,
     ):
         with self._conexion:
             self._conexion.execute(
                 """
                 UPDATE atenciones
-                SET diagnostico = ?, profesional_derivado_codigo = ?
+                SET diagnostico = ?, profesional_derivado_codigo = ?,
+                    informe_derivacion = COALESCE(?, informe_derivacion)
                 WHERE codigo = ?
                 """,
-                (diagnostico, profesional_derivado_codigo, codigo_atencion),
+                (
+                    diagnostico,
+                    profesional_derivado_codigo,
+                    informe_derivacion,
+                    codigo_atencion,
+                ),
             )
 
     # =========================================================

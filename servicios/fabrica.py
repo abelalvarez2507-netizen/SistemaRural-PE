@@ -113,6 +113,7 @@ class FabricaEntidades:
         estado="Pendiente",
         recetas=None,
         profesional_derivado=None,
+        informe_derivacion="",
     ):
         return AtencionMedica(
             codigo,
@@ -121,4 +122,5 @@ class FabricaEntidades:
             estado,
             recetas,
             profesional_derivado,
+            informe_derivacion,
         )

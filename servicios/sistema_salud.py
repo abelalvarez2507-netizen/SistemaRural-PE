@@ -210,6 +210,7 @@ class SistemaSalud:
         for fila in datos:
             codigo, cita_codigo, diagnostico, estado = fila[:4]
             profesional_derivado_codigo = fila[4] if len(fila) > 4 else None
+            informe_derivacion = fila[5] if len(fila) > 5 else ""
 
             cita = next(
                 (
@@ -248,6 +249,7 @@ class SistemaSalud:
                 estado,
                 recetas,
                 profesional_derivado,
+                informe_derivacion,
             )
             self._atenciones.append(atencion)
 
@@ -523,7 +525,7 @@ class SistemaSalud:
         for cita in self._citas:
             if cita.codigo == excluir_codigo:
                 continue
-            if cita.estado not in {"Pendiente", "Reprogramada"}:
+            if cita.estado not in {"Pendiente", "Reprogramada", "En proceso"}:
                 continue
             if cita.fecha != fecha or cita.hora != hora:
                 continue
@@ -555,7 +557,7 @@ class SistemaSalud:
             cita.hora
             for cita in self._citas
             if cita.codigo != excluir_codigo
-            and cita.estado in {"Pendiente", "Reprogramada"}
+            and cita.estado in {"Pendiente", "Reprogramada", "En proceso"}
             and cita.fecha == fecha_normalizada
             and cita.profesional.codigo_profesional == profesional_codigo
         }
@@ -596,7 +598,7 @@ class SistemaSalud:
                     cita.paciente.codigo == paciente_codigo
                     and cita.fecha == fecha_normalizada
                     and cita.hora == hora
-                    and cita.estado in {"Pendiente", "Reprogramada"}
+                    and cita.estado in {"Pendiente", "Reprogramada", "En proceso"}
                     for cita in self._citas
                 )
             }
@@ -618,7 +620,7 @@ class SistemaSalud:
             cita.paciente.codigo == paciente_codigo
             and cita.fecha == fecha_normalizada
             and cita.hora == hora_normalizada
-            and cita.estado in {"Pendiente", "Reprogramada"}
+            and cita.estado in {"Pendiente", "Reprogramada", "En proceso"}
             for cita in self._citas
         ):
             return []
@@ -682,7 +684,7 @@ class SistemaSalud:
         )
         if cita is None:
             raise ValueError("No se encontró la cita.")
-        if cita.estado in {"Atendida", "No atendida", "Cancelada"}:
+        if cita.estado in {"Atendida", "En proceso", "No atendida", "Cancelada"}:
             raise ValueError("Esta cita ya no se puede reprogramar.")
 
         from servicios.validaciones import normalizar_fecha, normalizar_hora
@@ -718,17 +720,60 @@ class SistemaSalud:
     def cancelar_cita(self, codigo_cita):
         self.actualizar_estado_cita(codigo_cita, "Cancelada")
 
-    def actualizar_citas_vencidas(self):
-        ahora = datetime.now()
-        vencidas = [
-            cita
-            for cita in self._citas
-            if cita.estado in {"Pendiente", "Reprogramada"}
-            and cita.fecha_hora <= ahora
-        ]
-        for cita in vencidas:
-            self.actualizar_estado_cita(cita.codigo, "Cancelada")
-        return len(vencidas)
+    def actualizar_citas_vencidas(self, ahora=None):
+        """Sincroniza automáticamente cita y atención con el turno de 30 minutos."""
+        ahora = ahora or datetime.now()
+        cambios = 0
+        atenciones_por_cita = {
+            atencion.cita.codigo: atencion for atencion in self._atenciones
+        }
+
+        for cita in self._citas:
+            if cita.estado in {"Cancelada", "No atendida"}:
+                continue
+
+            atencion = atenciones_por_cita.get(cita.codigo)
+            fin_turno = cita.fecha_hora + timedelta(minutes=30)
+
+            if atencion and atencion.estado == "Finalizada":
+                if cita.estado != "Atendida":
+                    self.actualizar_estado_cita(cita.codigo, "Atendida")
+                    cambios += 1
+                continue
+
+            if atencion and atencion.estado == "No atendida":
+                if cita.estado != "No atendida":
+                    self.actualizar_estado_cita(cita.codigo, "No atendida")
+                    cambios += 1
+                continue
+
+            # Una derivación permanece activa hasta el veredicto del especialista.
+            if atencion and atencion.profesional_derivado:
+                if cita.fecha_hora > ahora:
+                    continue
+                if atencion.estado != "En proceso":
+                    self.actualizar_estado_atencion(atencion.codigo, "En proceso")
+                    cambios += 1
+                elif cita.estado != "En proceso":
+                    self.actualizar_estado_cita(cita.codigo, "En proceso")
+                    cambios += 1
+                continue
+
+            if cita.fecha_hora <= ahora < fin_turno:
+                if cita.estado != "En proceso":
+                    self.actualizar_estado_cita(cita.codigo, "En proceso")
+                    cambios += 1
+                if atencion and atencion.estado != "En proceso":
+                    self.actualizar_estado_atencion(atencion.codigo, "En proceso")
+                    cambios += 1
+            elif ahora >= fin_turno and cita.estado != "No atendida":
+                if atencion:
+                    self.actualizar_estado_atencion(atencion.codigo, "No atendida")
+                else:
+                    self.actualizar_estado_cita(cita.codigo, "No atendida")
+                cambios += 1
+
+        return cambios
 
     # =========================================================
     # REGISTRAR ATENCIÓN
@@ -795,9 +840,14 @@ class SistemaSalud:
             atencion
         )
 
-        # La visita marca la cita como Atendida; el avance clínico conserva
-        # su propio estado (Pendiente, En proceso o Finalizada).
-        self.actualizar_estado_cita(cita.codigo, "Atendida")
+        estado_cita = (
+            "No atendida"
+            if atencion.estado == "No atendida"
+            else "En proceso"
+            if atencion.profesional_derivado or atencion.estado != "Finalizada"
+            else "Atendida"
+        )
+        self.actualizar_estado_cita(cita.codigo, estado_cita)
 
     def actualizar_atencion(
         self,
@@ -805,6 +855,7 @@ class SistemaSalud:
         diagnostico,
         recetas=None,
         profesional_derivado=None,
+        profesional_autor=None,
     ):
         atencion = next(
             (item for item in self._atenciones if item.codigo == codigo_atencion),
@@ -813,7 +864,10 @@ class SistemaSalud:
         if atencion is None:
             raise ValueError("No se encontró la atención médica.")
         atencion.diagnostico = diagnostico
-        atencion.profesional_derivado = profesional_derivado
+        if profesional_derivado is not None:
+            atencion.profesional_derivado = profesional_derivado
+        if atencion.profesional_derivado and not atencion.informe_derivacion:
+            atencion.informe_derivacion = diagnostico
         self._repositorio.actualizar_diagnostico_atencion(
             codigo_atencion,
             atencion.diagnostico,
@@ -822,6 +876,7 @@ class SistemaSalud:
                 if atencion.profesional_derivado
                 else None
             ),
+            atencion.informe_derivacion,
         )
         if recetas is not None:
             atencion.recetas = self._validar_recetas(recetas)
@@ -829,8 +884,16 @@ class SistemaSalud:
                 codigo_atencion,
                 atencion.recetas,
             )
-        self.actualizar_estado_atencion(codigo_atencion, "Finalizada")
-        self.actualizar_estado_cita(atencion.cita.codigo, "Atendida")
+        es_medico_remitente = (
+            atencion.profesional_derivado is not None
+            and profesional_autor is not None
+            and profesional_autor.codigo_profesional
+            == atencion.cita.profesional.codigo_profesional
+        )
+        self.actualizar_estado_atencion(
+            codigo_atencion,
+            "En proceso" if es_medico_remitente else "Finalizada",
+        )
 
     # =========================================================
     # ESTADOS DE CITAS
@@ -845,7 +908,7 @@ class SistemaSalud:
         if nuevo_estado not in Cita.ESTADOS_VALIDOS:
             raise ValueError(
                 "Estado inválido. Use: "
-                "Pendiente, Atendida, Reprogramada, No atendida o Cancelada."
+                "Pendiente, En proceso, Atendida, Reprogramada, No atendida o Cancelada."
             )
 
         cita = next(
@@ -886,7 +949,7 @@ class SistemaSalud:
         ):
             raise ValueError(
                 "Estado inválido. Use: "
-                "Pendiente, En proceso o Finalizada."
+                "Pendiente, En proceso, Finalizada o No atendida."
             )
 
         atencion = next(
@@ -910,6 +973,13 @@ class SistemaSalud:
         )
 
         atencion.estado = nuevo_estado
+        estado_cita = {
+            "Pendiente": "Pendiente",
+            "En proceso": "En proceso",
+            "Finalizada": "Atendida",
+            "No atendida": "No atendida",
+        }[nuevo_estado]
+        self.actualizar_estado_cita(atencion.cita.codigo, estado_cita)
 
     # =========================================================
     # CONSULTAS
@@ -1000,18 +1070,6 @@ class SistemaSalud:
             raise ValueError(f"Usa la fecha de {etiqueta} DD/MM/AAAA.")
 
         fecha_vencimiento = normalizar_fecha(vencimiento, "vencimiento")
-        fecha_fabricacion_normalizada = None
-        if fecha_fabricacion is not None:
-            fecha_fabricacion_normalizada = normalizar_fecha(
-                fecha_fabricacion, "fabricación"
-            )
-            if fecha_fabricacion_normalizada > date.today():
-                raise ValueError("La fecha de fabricación no puede estar en el futuro.")
-            if fecha_vencimiento < fecha_fabricacion_normalizada:
-                raise ValueError(
-                    "El vencimiento no puede ser anterior a la fecha de fabricación."
-                )
-            lote = f"lot-{fecha_fabricacion_normalizada:%d%m%Y}-b"
         vencimiento = fecha_vencimiento.isoformat()
         stock = self._entero_no_negativo(stock, "El stock")
         if stock == 0:
@@ -1170,6 +1228,9 @@ class SistemaSalud:
                 "No se encontró el paciente."
             )
 
+        atenciones_por_cita = {
+            atencion.cita.codigo: atencion for atencion in self._atenciones
+        }
         citas = list(
             filter(
                 lambda cita:
@@ -1178,7 +1239,13 @@ class SistemaSalud:
                         == codigo_paciente
                     )
                     and
-                    cita.estado == "Atendida",
+                    (
+                        cita.estado == "Atendida"
+                        or (
+                            atenciones_por_cita.get(cita.codigo)
+                            and atenciones_por_cita[cita.codigo].profesional_derivado
+                        )
+                    ),
                 self._citas
             )
         )
@@ -1191,7 +1258,10 @@ class SistemaSalud:
                         == codigo_paciente
                     )
                     and
-                    atencion.estado == "Finalizada",
+                    (
+                        atencion.estado == "Finalizada"
+                        or atencion.profesional_derivado is not None
+                    ),
                 self._atenciones
             )
         )

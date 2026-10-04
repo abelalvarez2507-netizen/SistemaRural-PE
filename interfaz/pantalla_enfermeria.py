@@ -414,7 +414,7 @@ class PantallaEnfermeria:
             ).pack(anchor="w")
             return
         for cita in citas:
-            fila = tk.Frame(panel, bg=COLOR_PANEL, pady=8)
+            fila = tk.Frame(panel, bg=COLOR_PANEL, pady=14)
             fila.pack(fill="x")
             fila.columnconfigure(0, weight=1)
             fila.columnconfigure(1, weight=2)
@@ -425,7 +425,7 @@ class PantallaEnfermeria:
                 tk.Label(
                     fila,
                     text=texto,
-                    font=("Arial", 10, "bold" if col == 2 else "normal"),
+                    font=("Arial", 11, "bold" if col == 2 else "normal"),
                     fg=COLOR_TEXTO,
                     bg=COLOR_PANEL,
                     anchor="w",
@@ -434,7 +434,7 @@ class PantallaEnfermeria:
             tk.Label(
                 panel,
                 text=cita.motivo,
-                font=("Arial", 9),
+                font=("Arial", 10),
                 fg=COLOR_GRIS,
                 bg=COLOR_PANEL,
                 anchor="w",
@@ -680,17 +680,7 @@ class PantallaEnfermeria:
             "Número de lote *",
             2,
             1,
-            placeholder="Ej.: lot-25072026-b",
-            solo_lectura=True,
-        )
-        fabricacion = self._entrada_campo(
-            formulario,
-            campos,
-            "fabricacion",
-            "Fecha de fabricación (DD/MM/AAAA) *",
-            4,
-            0,
-            placeholder="Ej.: 25/07/2026",
+            placeholder="Ej.: L-2026-001",
         )
         vencimiento = self._entrada_campo(
             formulario,
@@ -698,7 +688,7 @@ class PantallaEnfermeria:
             "vencimiento",
             "Vencimiento (DD/MM/AAAA) *",
             4,
-            1,
+            0,
             placeholder="Ej.: 25/07/2027",
         )
         self._entrada_campo(
@@ -724,28 +714,6 @@ class PantallaEnfermeria:
         )
         estado.pack(fill="x", pady=(2, 8))
 
-        def actualizar_lote():
-            if getattr(fabricacion, "placeholder_activo", False):
-                valor = ""
-            else:
-                valor = fabricacion.get().strip()
-            try:
-                fecha = datetime.strptime(valor, "%d/%m/%Y").date()
-                if fecha > date.today():
-                    raise ValueError
-                generado = f"lot-{fecha:%d%m%Y}-b"
-                lote.configure(state="normal", fg=COLOR_TEXTO)
-                lote.delete(0, tk.END)
-                lote.insert(0, generado)
-                lote.placeholder_activo = False
-                lote.configure(state="readonly")
-            except ValueError:
-                lote.configure(state="normal")
-                lote.delete(0, tk.END)
-                lote.insert(0, "Ej.: lot-25072026-b")
-                lote.placeholder_activo = True
-                lote.configure(state="readonly", fg=COLOR_GRIS)
-
         def validar_vencimiento():
             valor = self._valor_campo(vencimiento)
             if not valor:
@@ -762,7 +730,6 @@ class PantallaEnfermeria:
             elif estado.cget("text") == "La fecha de vencimiento no puede ser anterior a hoy.":
                 estado.configure(text="", fg=COLOR_GRIS)
 
-        self._configurar_fecha(fabricacion, actualizar_lote)
         self._configurar_fecha(vencimiento, validar_vencimiento)
 
         def guardar():
@@ -777,7 +744,6 @@ class PantallaEnfermeria:
                     self._valor_campo(campos["stock_minimo"]) or "0",
                     self._valor_campo(campos["precio_venta"]),
                     self.enfermero_actual.nombre,
-                    fecha_fabricacion=self._valor_campo(campos["fabricacion"]),
                 )
             except Exception as error:
                 estado.configure(text=str(error), fg=COLOR_ROJO)

@@ -63,6 +63,7 @@ class RepositorioSaludProtocol(Protocol):
         codigo_atencion,
         diagnostico,
         profesional_derivado_codigo=None,
+        informe_derivacion=None,
     ):
         ...
 

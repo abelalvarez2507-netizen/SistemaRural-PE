@@ -419,6 +419,11 @@ class VentanaPrincipal:
             for atencion in atenciones
             if atencion.estado == "En proceso"
         ]
+        atenciones_no_atendidas = [
+            atencion
+            for atencion in atenciones
+            if atencion.estado == "No atendida"
+        ]
 
         def obtener_fecha_cita(cita):
             return cita.fecha_hora
@@ -432,7 +437,7 @@ class VentanaPrincipal:
         proximas = [
             cita
             for cita in citas
-            if cita.estado in {"Pendiente", "Reprogramada"}
+            if cita.estado in {"Pendiente", "Reprogramada", "En proceso"}
             and obtener_fecha_cita(cita) >= hoy
         ]
 
@@ -930,6 +935,15 @@ class VentanaPrincipal:
                             f"Diagnóstico: {atencion.diagnostico}",
                             f"Estado de la atención: {atencion.estado}",
                         ))
+                        if atencion.informe_derivacion and atencion.informe_derivacion != atencion.diagnostico:
+                            bloques.append(
+                                f"Informe de derivación: {atencion.informe_derivacion}"
+                            )
+                        if atencion.profesional_derivado:
+                            bloques.append(
+                                f"Derivado a: {atencion.profesional_derivado.nombre} "
+                                f"({atencion.profesional_derivado.especialidad})"
+                            )
                         if atencion.recetas:
                             bloques.append("Medicamentos recetados:")
                             bloques.extend(
@@ -1008,6 +1022,15 @@ class VentanaPrincipal:
                             f"Diagnóstico: {atencion.diagnostico}",
                             f"Estado de la atención: {atencion.estado}",
                         ))
+                        if atencion.informe_derivacion and atencion.informe_derivacion != atencion.diagnostico:
+                            bloques.append(
+                                f"Informe de derivación: {atencion.informe_derivacion}"
+                            )
+                        if atencion.profesional_derivado:
+                            bloques.append(
+                                f"Derivado a: {atencion.profesional_derivado.nombre} "
+                                f"({atencion.profesional_derivado.especialidad})"
+                            )
 
                 bloques.extend((
                     "",
@@ -1481,6 +1504,10 @@ class VentanaPrincipal:
                 len(citas_atendidas)
             ),
             (
+                "Citas en proceso",
+                sum(cita.estado == "En proceso" for cita in citas)
+            ),
+            (
                 "Citas reprogramadas",
                 len(reprogramar)
             ),
@@ -1495,6 +1522,10 @@ class VentanaPrincipal:
             (
                 "Atenciones en proceso",
                 len(atenciones_proceso)
+            ),
+            (
+                "Atenciones no atendidas",
+                len(atenciones_no_atendidas)
             ),
             (
                 "Atenciones finalizadas",
@@ -2393,15 +2424,106 @@ class VentanaPrincipal:
         """Agrupa el alta, consulta y búsqueda de personal de enfermería."""
         self._crear_menu_gestion(
             "Gestión de enfermería",
-            "Registre personal de enfermería y consulte sus datos registrados.",
+            "Registre personal de enfermería y consulte sus datos registrados y ventas de farmacia.",
             [
                 ("Registrar personal", lambda: self.registrar_personal("enfermeria")),
                 ("Ver personal", lambda: self.ver_personal("enfermeria")),
                 ("Buscar personal", lambda: self.buscar_personal("enfermeria")),
+                ("Historial de ventas", self.ver_historial_ventas_enfermeria),
             ],
             ancho=540,
-            alto=460,
+            alto=520,
         )
+
+    def ver_historial_ventas_enfermeria(self):
+        """Muestra las ventas de medicamentos registradas desde enfermería."""
+        contenido = self._crear_pantalla_interna("Historial de ventas de enfermería")
+        ventas = self.sistema.obtener_ventas_medicamentos(500)
+        tk.Label(
+            contenido,
+            text=f"Últimas {len(ventas)} ventas registradas",
+            font=FUENTE_SECCION,
+            fg=COLOR_TEXTO,
+            bg=COLOR_FONDO,
+        ).pack(anchor="w", padx=24, pady=(18, 8))
+
+        filtro = tk.StringVar(master=self.ventana)
+        entrada = tk.Entry(
+            contenido,
+            textvariable=filtro,
+            font=FUENTE_BOTON,
+            bg=COLOR_PANEL_CLARO,
+            fg=COLOR_TEXTO,
+            relief="flat",
+        )
+        entrada.pack(fill="x", padx=24, pady=(0, 12), ipady=7)
+        entrada.insert(0, "Buscar por paciente, medicamento o responsable")
+        entrada.configure(fg=COLOR_GRIS)
+
+        listado = tk.Frame(contenido, bg=COLOR_FONDO)
+        listado.pack(fill="both", expand=True, padx=24, pady=(0, 20))
+
+        def actualizar(*_args):
+            for widget in listado.winfo_children():
+                widget.destroy()
+            consulta = filtro.get().strip().casefold()
+            if consulta == "buscar por paciente, medicamento o responsable":
+                consulta = ""
+            resultados = [
+                venta
+                for venta in ventas
+                if not consulta
+                or consulta in " ".join(map(str, venta)).casefold()
+            ]
+            if not resultados:
+                tk.Label(
+                    listado,
+                    text="No hay ventas que coincidan con la búsqueda.",
+                    font=FUENTE_BOTON,
+                    fg=COLOR_GRIS,
+                    bg=COLOR_FONDO,
+                ).pack(anchor="w", pady=12)
+                return
+            for venta in resultados:
+                (_id, medicamento, lote, cantidad, precio, total, _cliente,
+                 vendedor, fecha_hora, codigo_paciente) = venta
+                tarjeta = tk.Frame(
+                    listado,
+                    bg=COLOR_PANEL,
+                    padx=16,
+                    pady=12,
+                    highlightthickness=1,
+                    highlightbackground=COLOR_PANEL_CLARO,
+                )
+                tarjeta.pack(fill="x", pady=4)
+                tk.Label(
+                    tarjeta,
+                    text=f"{fecha_hora}   ·   {medicamento}   ·   Lote {lote}",
+                    font=FUENTE_SECCION,
+                    fg=COLOR_TEXTO,
+                    bg=COLOR_PANEL,
+                    wraplength=1050,
+                    justify="left",
+                ).pack(anchor="w")
+                tk.Label(
+                    tarjeta,
+                    text=(
+                        f"Paciente: {codigo_paciente or 'sin vincular'}   ·   "
+                        f"Cantidad: {cantidad}   ·   "
+                        f"Precio unitario: S/ {float(precio):.2f}   ·   "
+                        f"Total: S/ {float(total):.2f}   ·   "
+                        f"Registró: {vendedor}"
+                    ),
+                    font=FUENTE_BOTON,
+                    fg=COLOR_GRIS,
+                    bg=COLOR_PANEL,
+                    wraplength=1050,
+                    justify="left",
+                ).pack(anchor="w", pady=(5, 0))
+
+        filtro.trace_add("write", actualizar)
+        entrada.bind("<FocusIn>", lambda _evento: entrada.delete(0, tk.END))
+        actualizar()
 
     # =========================================================
     # GESTIÓN DE CITAS
@@ -2414,7 +2536,7 @@ class VentanaPrincipal:
             "Gestión de citas",
             (
                 "Registre, consulte, reprograme o cancele citas. "
-                "El estado de atención se controla desde Atenciones médicas."
+                "Los estados avanzan junto con la agenda: En proceso durante el turno, No atendida al terminar sin opinión, o Atendida al finalizar el veredicto."
             ),
             [
                 (
@@ -2453,7 +2575,7 @@ class VentanaPrincipal:
             "Atenciones médicas",
             (
                 "Registre y siga cada atención: Pendiente, En proceso o Finalizada. "
-                "Al registrar una atención, su cita pasa a Atendida."
+                "Los estados de la cita y de la atención se sincronizan con la agenda profesional y el turno de 30 minutos."
             ),
             [
                 (
@@ -4105,12 +4227,21 @@ class VentanaPrincipal:
         atenciones = (
             self.sistema.obtener_atenciones()
         )
+        codigos_con_atencion = {
+            atencion.cita.codigo for atencion in atenciones
+        }
+        citas_en_seguimiento = [
+            cita
+            for cita in self.sistema.obtener_citas()
+            if cita.codigo not in codigos_con_atencion
+            and cita.estado in {"En proceso", "No atendida"}
+        ]
 
-        if not atenciones:
+        if not atenciones and not citas_en_seguimiento:
 
             texto.insert(
                 tk.END,
-                "No existen atenciones registradas."
+                "No hay atenciones ni citas en proceso para mostrar."
             )
 
             texto.config(
@@ -4135,6 +4266,17 @@ class VentanaPrincipal:
                 tk.END,
                 atencion.mostrar_informacion()
                 + "\n\n"
+            )
+
+        for cita in citas_en_seguimiento:
+            texto.insert(
+                tk.END,
+                (
+                    f"Cita: {cita.codigo} | Paciente: {cita.paciente.nombre} | "
+                    f"Profesional: {cita.profesional.nombre} | "
+                    f"Fecha: {cita.fecha} {cita.hora} | "
+                    f"Opinión pendiente | Estado: {cita.estado}\n\n"
+                )
             )
 
         texto.config(
@@ -4169,7 +4311,7 @@ class VentanaPrincipal:
                 for atencion
                 in self.sistema.obtener_atenciones()
             )
-            and cita.estado in {"Pendiente", "Reprogramada"}
+            and cita.estado in {"Pendiente", "Reprogramada", "En proceso"}
         ]
 
         if not citas_disponibles:
@@ -4332,11 +4474,13 @@ class VentanaPrincipal:
 
     def cambiar_estado_atencion(self):
 
+        self.sistema.actualizar_citas_vencidas()
+
         atenciones = [
             atencion
             for atencion
             in self.sistema.obtener_atenciones()
-            if atencion.estado != "Finalizada"
+            if atencion.estado not in {"Finalizada", "No atendida"}
         ]
 
         if not atenciones:
@@ -4398,7 +4542,8 @@ class VentanaPrincipal:
             estado_var,
             "Pendiente",
             "En proceso",
-            "Finalizada"
+            "Finalizada",
+            "No atendida",
         ).pack()
 
         informacion = tk.Label(
@@ -4482,6 +4627,7 @@ class VentanaPrincipal:
 
                     mensaje = (
                         "La atención fue finalizada.\n\n"
+                        "La cita también quedó marcada como atendida.\n"
                         "El registro NO fue eliminado.\n"
                         "Ahora aparecerá en el "
                         "Historial Clínico y ya no "
@@ -4491,13 +4637,19 @@ class VentanaPrincipal:
                 elif nuevo_estado == "En proceso":
 
                     mensaje = (
-                        "La atención está en proceso."
+                        "La atención y la cita quedaron en proceso."
+                    )
+
+                elif nuevo_estado == "No atendida":
+
+                    mensaje = (
+                        "La atención y la cita quedaron marcadas como no atendidas."
                     )
 
                 else:
 
                     mensaje = (
-                        "La atención volvió a estar pendiente."
+                        "La atención y la cita volvieron a estar pendientes."
                     )
 
                 messagebox.showinfo(
@@ -5076,6 +5228,11 @@ class VentanaPrincipal:
                                 f"{atencion.diagnostico}\n"
                             )
                         )
+                        if atencion.informe_derivacion and atencion.informe_derivacion != atencion.diagnostico:
+                            texto.insert(
+                                tk.END,
+                                f"Informe de derivación: {atencion.informe_derivacion}\n",
+                            )
 
                         texto.insert(
                             tk.END,
@@ -5375,9 +5532,15 @@ class VentanaPrincipal:
                     for atencion
                     in self.sistema.obtener_atenciones()
                     if (
-                        atencion.profesional.codigo_profesional
+                        atencion.cita.profesional.codigo_profesional
                         == profesional.codigo_profesional
+                        or (
+                            atencion.profesional_derivado
+                            and atencion.profesional_derivado.codigo_profesional
+                            == profesional.codigo_profesional
+                        )
                     )
+
                 ]
 
                 # =================================================
@@ -5583,6 +5746,11 @@ class VentanaPrincipal:
                                 f"{atencion.diagnostico}\n"
                             )
                         )
+                        if atencion.informe_derivacion and atencion.informe_derivacion != atencion.diagnostico:
+                            texto.insert(
+                                tk.END,
+                                f"Informe de derivación: {atencion.informe_derivacion}\n",
+                            )
 
                         texto.insert(
                             tk.END,
