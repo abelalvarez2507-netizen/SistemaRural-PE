@@ -5,6 +5,7 @@ from modelos.atencion_medica import AtencionMedica
 from modelos.medicamento_recetado import MedicamentoRecetado
 from servicios.sistema_salud import SistemaSalud
 from servicios.validaciones import validar_diagnostico
+from interfaz.campos import configurar_mascara_fecha
 
 from interfaz.estilos import (
     COLOR_FONDO,
@@ -353,7 +354,7 @@ class PantallaProfesional:
 
         tk.Label(
             contenedor,
-            text="Agenda por fecha y horario. Los turnos duran 30 minutos, de 08:00 a 17:00.",
+            text="Agenda por fecha y horario. Los turnos duran 30 minutos, de 07:00 a 18:00; el último comienza a las 17:30.",
             font=("Arial", 9),
             fg=COLOR_GRIS,
             bg=COLOR_FONDO,
@@ -441,6 +442,83 @@ class PantallaProfesional:
         texto.pack(fill="x", padx=22, pady=8)
         if atencion:
             texto.insert("1.0", atencion.diagnostico)
+
+        es_medico_general = (
+            self.profesional_actual.especialidad.strip().casefold()
+            == "medicina general"
+        )
+        opciones_derivacion = {}
+        derivacion_var = None
+        if es_medico_general:
+            panel_derivacion = tk.Frame(contenido, bg=COLOR_PANEL, padx=14, pady=12)
+            panel_derivacion.pack(fill="x", padx=22, pady=(4, 10))
+            tk.Label(
+                panel_derivacion,
+                text="Derivar al profesional adecuado (obligatorio)",
+                font=FUENTE_SECCION,
+                fg=COLOR_TEXTO,
+                bg=COLOR_PANEL,
+            ).pack(anchor="w")
+            tk.Label(
+                panel_derivacion,
+                text="Selecciona al especialista que continuará la atención. La derivación quedará en el historial del paciente.",
+                font=FUENTE_BOTON,
+                fg=COLOR_GRIS,
+                bg=COLOR_PANEL,
+                wraplength=760,
+                justify="left",
+            ).pack(anchor="w", pady=(2, 8))
+
+            especialistas = [
+                profesional
+                for profesional in self.sistema.obtener_personal()
+                if profesional.codigo_profesional
+                != self.profesional_actual.codigo_profesional
+                and "enfermer" not in profesional.especialidad.casefold()
+                and profesional.especialidad.strip().casefold()
+                != "medicina general"
+            ]
+            etiqueta_vacia = "-- Selecciona el profesional derivado --"
+            opciones_derivacion[etiqueta_vacia] = None
+            for profesional in especialistas:
+                etiqueta = (
+                    f"{profesional.codigo_profesional} · {profesional.nombre} · "
+                    f"{profesional.especialidad}"
+                )
+                opciones_derivacion[etiqueta] = profesional
+
+            if atencion and atencion.profesional_derivado:
+                profesional_guardado = atencion.profesional_derivado
+                etiqueta_guardada = (
+                    f"{profesional_guardado.codigo_profesional} · "
+                    f"{profesional_guardado.nombre} · "
+                    f"{profesional_guardado.especialidad}"
+                )
+                opciones_derivacion[etiqueta_guardada] = profesional_guardado
+                valor_inicial = etiqueta_guardada
+            else:
+                valor_inicial = etiqueta_vacia
+
+            derivacion_var = tk.StringVar(value=valor_inicial)
+            menu_derivacion = tk.OptionMenu(
+                panel_derivacion,
+                derivacion_var,
+                *opciones_derivacion,
+            )
+            menu_derivacion.configure(
+                bg=COLOR_PANEL_CLARO,
+                fg=COLOR_TEXTO,
+                relief="flat",
+            )
+            menu_derivacion.pack(anchor="w")
+            if not especialistas:
+                tk.Label(
+                    panel_derivacion,
+                    text="No hay especialistas registrados. Registra uno antes de guardar esta atención.",
+                    font=("Arial", 9),
+                    fg=COLOR_ROJO,
+                    bg=COLOR_PANEL,
+                ).pack(anchor="w", pady=(5, 0))
 
         panel_recetas = tk.Frame(contenido, bg=COLOR_PANEL, padx=14, pady=12)
         panel_recetas.pack(fill="x", padx=22, pady=(4, 10))
@@ -537,8 +615,22 @@ class PantallaProfesional:
             try:
                 diagnostico = validar_diagnostico(texto.get("1.0", "end-1c"))
                 recetas = leer_recetas()
+                profesional_derivado = None
+                if es_medico_general:
+                    profesional_derivado = opciones_derivacion.get(
+                        derivacion_var.get()
+                    )
+                    if profesional_derivado is None:
+                        raise ValueError(
+                            "Selecciona al especialista al que se derivará al paciente."
+                        )
                 if atencion:
-                    self.sistema.actualizar_atencion(atencion.codigo, diagnostico, recetas)
+                    self.sistema.actualizar_atencion(
+                        atencion.codigo,
+                        diagnostico,
+                        recetas,
+                        profesional_derivado,
+                    )
                 else:
                     atencion_nueva = AtencionMedica(
                         self.sistema.generar_codigo_atencion(),
@@ -546,23 +638,24 @@ class PantallaProfesional:
                         diagnostico,
                         "Finalizada",
                         recetas,
+                        profesional_derivado,
                     )
                     self.sistema.registrar_atencion(atencion_nueva)
                 messagebox.showinfo(
                     "Atención guardada",
-                    "La opinión médica y las recetas se guardaron; la cita quedó marcada como atendida.",
+                    (
+                        "La opinión médica, la derivación y las recetas se guardaron; "
+                        "la cita quedó marcada como atendida."
+                        if profesional_derivado
+                        else "La opinión médica y las recetas se guardaron; "
+                        "la cita quedó marcada como atendida."
+                    ),
                     parent=self.ventana,
                 )
                 self.mostrar_agenda()
             except (TypeError, ValueError) as error:
                 messagebox.showerror("No se pudo guardar", str(error), parent=self.ventana)
 
-        self._boton(
-            contenido,
-            "← Volver",
-            self.mostrar_agenda,
-            COLOR_PANEL,
-        ).pack(pady=(4, 6))
         self._boton(contenido, "Guardar opinión y receta", guardar).pack(pady=(0, 18))
 
     def marcar_no_atendida(self, cita):
@@ -606,6 +699,7 @@ class PantallaProfesional:
         tk.Label(contenido, text="Fecha (DD/MM/AAAA):", bg=COLOR_FONDO, fg=COLOR_GRIS_CLARO).pack()
         entrada_fecha = tk.Entry(contenido, width=18, justify="center")
         entrada_fecha.pack(pady=(4, 10), ipady=5)
+        configurar_mascara_fecha(entrada_fecha)
         tk.Label(
             contenido,
             text="Horarios disponibles (se actualizan al salir de la fecha):",
@@ -655,12 +749,6 @@ class PantallaProfesional:
             except ValueError as error:
                 messagebox.showerror("No se pudo reprogramar", str(error), parent=self.ventana)
 
-        self._boton(
-            contenido,
-            "← Volver",
-            self.mostrar_agenda,
-            COLOR_PANEL,
-        ).pack(pady=(2, 6))
         self._boton(contenido, "Guardar nueva fecha", guardar).pack(pady=(0, 18))
 
     def volver_a_inicio(self):

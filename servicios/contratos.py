@@ -58,7 +58,12 @@ class RepositorioSaludProtocol(Protocol):
     ):
         ...
 
-    def actualizar_diagnostico_atencion(self, codigo_atencion, diagnostico):
+    def actualizar_diagnostico_atencion(
+        self,
+        codigo_atencion,
+        diagnostico,
+        profesional_derivado_codigo=None,
+    ):
         ...
 
     def guardar_recetas_atencion(self, codigo_atencion, recetas):

@@ -1,8 +1,13 @@
 """Pantalla de acceso y alta de cuentas dentro de la ventana principal."""
 
 import tkinter as tk
+from tkinter import messagebox
 
 from servicios.autenticacion import ServicioAutenticacion
+from servicios.validaciones import (
+    validar_dni_en_edicion,
+    validar_nombre_en_edicion,
+)
 from interfaz.navegacion import VistaDesplazable
 from interfaz.estilos import (
     COLOR_BLANCO,
@@ -102,11 +107,11 @@ class ModalVerificador(tk.Frame):
         ),
         "profesional": (
             "Profesional de salud",
-            "Ingresa con la cuenta vinculada a tu registro profesional.",
+            "Ingresar cuenta ",
         ),
         "enfermeria": (
-            "Enfermería",
-            "Ingresa con la cuenta vinculada a tu registro de enfermería.",
+            "Área de enfermería",
+            "Ingresar cuenta",
         ),
     }
 
@@ -332,6 +337,27 @@ class ModalVerificador(tk.Frame):
             show="*" if secreto else "",
         )
         entrada.pack(fill="x", ipady=6 if compacto else 8)
+        if clave == "dni":
+            validacion = self.register(validar_dni_en_edicion)
+            entrada.configure(
+                validate="key",
+                validatecommand=(validacion, "%P"),
+            )
+        elif clave == "nombre":
+            validacion = self.register(validar_nombre_en_edicion)
+            entrada.configure(
+                validate="key",
+                validatecommand=(validacion, "%P"),
+            )
+        elif clave == "edad":
+            validacion = self.register(
+                lambda valor: valor == ""
+                or (len(valor) <= 3 and valor.isascii() and valor.isdigit())
+            )
+            entrada.configure(
+                validate="key",
+                validatecommand=(validacion, "%P"),
+            )
         self.campos[clave] = entrada
         return entrada
 
@@ -378,6 +404,8 @@ class ModalVerificador(tk.Frame):
         self._centrar()
 
     def _construir_modo(self, modo):
+        if modo == "registro" and self.rol in {"profesional", "enfermeria"}:
+            modo = "registro_personal_nuevo"
         self.modo = modo
         self._limpiar_formulario()
 
@@ -389,11 +417,16 @@ class ModalVerificador(tk.Frame):
             self._boton("Ingresar", self._iniciar_sesion, principal=True)
             if self.rol == "paciente":
                 self._enlace(
-                    "¿Eres nuevo? Crear mi cuenta de paciente",
+                    "¿Eres nuevo?"
+                    "Crear cuenta",
                     lambda: self._mostrar_modo("registro_nuevo"),
                 )
             elif self.rol != "administrativa":
-                self._enlace("Crear cuenta de acceso", self._mostrar_registro)
+                self._enlace(
+                    "¿Eres nuevo?"
+                    "Crear cuenta",
+                    lambda: self._mostrar_modo("registro_personal_nuevo"),
+                )
             password.bind("<Return>", lambda _evento: self._iniciar_sesion())
             self.campos["usuario"].focus_set()
             return
@@ -434,7 +467,7 @@ class ModalVerificador(tk.Frame):
             self.titulo.configure(text="CREAR MI CUENTA DE PACIENTE")
             self._campo("Nombre completo", "nombre")
             self._campo("Edad", "edad")
-            self._campo("DNI (8 dígitos)", "dni")
+            self._campo("DNI", "dni")
             self._campo("Nuevo usuario", "usuario")
             self._campo("Nueva contraseña", "password", secreto=True)
             confirmacion = self._campo(
@@ -444,9 +477,10 @@ class ModalVerificador(tk.Frame):
             tk.Label(
                 self.formulario,
                 text=(
-                    "Se creará tu registro de paciente con un código "
-                    "automático. Usa al menos 8 caracteres y un número en "
-                    "la contraseña."
+                    "Si tu DNI ya está registrado, se vinculará a ese registro. "
+                    "Si aún no lo está, se creará tu registro y un código "
+                    "automático. El DNI lleva 8 dígitos. La contraseña debe "
+                    "tener al menos 8 caracteres y un número."
                 ),
                 font=("Arial", 9),
                 fg=COLOR_GRIS,
@@ -458,10 +492,6 @@ class ModalVerificador(tk.Frame):
                 "Crear mi cuenta", self._crear_paciente_nuevo, principal=True
             )
             self._enlace(
-                "Ya tengo mi código de paciente",
-                lambda: self._mostrar_modo("registro"),
-            )
-            self._enlace(
                 "Volver al inicio de sesión",
                 lambda: self._mostrar_modo("login"),
             )
@@ -471,18 +501,88 @@ class ModalVerificador(tk.Frame):
             self.campos["nombre"].focus_set()
             return
 
-        self.titulo.configure(text="CREAR CUENTA DE ACCESO")
-        codigo_label = (
-            "Código de paciente"
-            if self.rol == "paciente"
-            else (
-                "Código de personal de enfermería"
-                if self.rol == "enfermeria"
-                else "Código profesional"
+        if modo == "registro_personal_nuevo":
+            self.acepta_terminos = None
+            self.titulo.configure(text="CREAR CUENTA DE PERSONAL")
+            self._campo("Nombres y apellidos", "nombre")
+            self._campo("Edad", "edad")
+            self._campo("DNI", "dni")
+            if self.rol == "profesional":
+                tk.Label(
+                    self.formulario,
+                    text="Especialidad",
+                    font=FUENTE_BOTON,
+                    fg=COLOR_TEXTO,
+                    bg=COLOR_BLANCO,
+                    anchor="w",
+                ).pack(fill="x", pady=(5, 2))
+                especialidades = (
+                    "Medicina General",
+                    "Obstetricia",
+                    "Odontología",
+                    "Psicología",
+                    "Nutrición",
+                    "Medicina Familiar",
+                    "Urología",
+                    "Pediatría",
+                    "Neurología",
+                )
+                self.especialidad_var = tk.StringVar(value=especialidades[0])
+                tk.OptionMenu(
+                    self.formulario,
+                    self.especialidad_var,
+                    *especialidades,
+                ).pack(fill="x", pady=(0, 4))
+            else:
+                tk.Label(
+                    self.formulario,
+                    font=FUENTE_BOTON,
+                    fg=COLOR_TEXTO,
+                    bg=COLOR_BLANCO,
+                    anchor="w",
+                ).pack(fill="x", pady=(5, 2))
+            self._campo("Código de autorización", "codigo_medico", secreto=True)
+            self._campo("Nuevo usuario", "usuario")
+            self._campo("Nueva contraseña", "password", secreto=True)
+            confirmacion = self._campo(
+                "Confirmar contraseña", "confirmacion", secreto=True
             )
-        )
-        self._campo(codigo_label, "codigo")
-        self._campo("DNI (8 dígitos)", "dni", secreto=True)
+            self._agregar_consentimiento()
+            tk.Label(
+                self.formulario,
+                text=(
+                    "Si ya tienes un registro, "
+                    "se vinculará a tu cuenta; si no, se creará tu registro "
+                    "con un código automático. Se requiere el código médico "
+                    "autorizado."
+                ),
+                font=("Arial", 9),
+                fg=COLOR_GRIS,
+                bg=COLOR_BLANCO,
+                wraplength=390,
+                justify="center",
+            ).pack(pady=(3, 0))
+            self._boton(
+                "Registrar y crear cuenta",
+                self._crear_personal_nuevo,
+                principal=True,
+            )
+            self._enlace(
+                "Volver al inicio de sesión",
+                lambda: self._mostrar_modo("login"),
+            )
+            confirmacion.bind(
+                "<Return>", lambda _evento: self._crear_personal_nuevo()
+            )
+            self.campos["nombre"].focus_set()
+            return
+
+        self.titulo.configure(text="CREAR CUENTA DE ACCESO")
+        if self.rol == "paciente":
+            self._campo("Código de paciente", "codigo")
+        self._campo("DNI", "dni", secreto=True)
+        if self.rol in {"profesional", "enfermeria"}:
+            self._campo("Código de verificacion", "codigo_medico", secreto=True)
         self._campo("Nuevo usuario", "usuario")
         self._campo("Nueva contraseña", "password", secreto=True)
         confirmacion = self._campo(
@@ -493,9 +593,11 @@ class ModalVerificador(tk.Frame):
         tk.Label(
             self.formulario,
             text=(
-                "Usa al menos 8 caracteres y un número. El DNI debe coincidir "
-                "con el registro; Enfermería requiere especialidad registrada."
-                if self.rol == "enfermeria"
+                    "El DNI debe coincidir con el registro administrativo. "
+                    "Tu código de personal se asigna automáticamente; ingresa "
+                    "el código médico autorizado. Usa una contraseña de 8 "
+                    "caracteres como mínimo y al menos un número."
+                if self.rol in {"profesional", "enfermeria"}
                 else "Usa al menos 8 caracteres y un número. El DNI debe "
                 "coincidir con el registro existente."
             ),
@@ -510,6 +612,11 @@ class ModalVerificador(tk.Frame):
             self._enlace(
                 "Soy paciente nuevo (crear mi registro)",
                 lambda: self._mostrar_modo("registro_nuevo"),
+            )
+        else:
+            self._enlace(
+                "Soy personal nuevo (crear mi registro)",
+                lambda: self._mostrar_modo("registro_personal_nuevo"),
             )
         self._enlace("Volver al inicio de sesión", lambda: self._mostrar_modo("login"))
         confirmacion.bind("<Return>", lambda _evento: self._crear_cuenta())
@@ -555,9 +662,16 @@ class ModalVerificador(tk.Frame):
                 self.campos["usuario"].get(),
                 self.campos["password"].get(),
                 self.rol,
-                self.campos["codigo"].get(),
+                self.campos.get("codigo").get()
+                if "codigo" in self.campos
+                else None,
                 self.campos["dni"].get(),
                 acepta_terminos=True,
+                codigo_medico=(
+                    self.campos["codigo_medico"].get()
+                    if "codigo_medico" in self.campos
+                    else None
+                ),
             )
         except ValueError as error:
             self.error.configure(text=str(error))
@@ -582,6 +696,43 @@ class ModalVerificador(tk.Frame):
         except ValueError as error:
             self.error.configure(text=str(error))
             return
+        messagebox.showinfo(
+            "Cuenta creada",
+            f"Tu registro quedó vinculado con el código {sesion.codigo_referencia}.",
+            parent=self,
+        )
+        self._completar(sesion)
+
+    def _crear_personal_nuevo(self):
+        if not self._requiere_aceptacion():
+            return
+        if self.campos["password"].get() != self.campos["confirmacion"].get():
+            self.error.configure(text="Las contraseñas no coinciden.")
+            return
+        try:
+            sesion = self.servicio.registrar_personal_nuevo(
+                self.campos["nombre"].get(),
+                self.campos["edad"].get(),
+                self.campos["dni"].get(),
+                self.campos["usuario"].get(),
+                self.campos["password"].get(),
+                self.rol,
+                especialidad=(
+                    self.especialidad_var.get()
+                    if self.rol == "profesional"
+                    else "Enfermería"
+                ),
+                acepta_terminos=True,
+                codigo_medico=self.campos["codigo_medico"].get(),
+            )
+        except ValueError as error:
+            self.error.configure(text=str(error))
+            return
+        messagebox.showinfo(
+            "Cuenta creada",
+            f"Tu registro quedó vinculado con el código {sesion.codigo_referencia}.",
+            parent=self,
+        )
         self._completar(sesion)
 
     def _mostrar_registro(self):

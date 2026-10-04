@@ -5,6 +5,7 @@ from modelos.atencion_medica import AtencionMedica
 from modelos.medicamento_recetado import MedicamentoRecetado
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+import random
 
 from servicios.repositorio import RepositorioSalud
 from servicios.fabrica import FabricaEntidades
@@ -206,12 +207,9 @@ class SistemaSalud:
             .obtener_atenciones()
         )
 
-        for (
-            codigo,
-            cita_codigo,
-            diagnostico,
-            estado
-        ) in datos:
+        for fila in datos:
+            codigo, cita_codigo, diagnostico, estado = fila[:4]
+            profesional_derivado_codigo = fila[4] if len(fila) > 4 else None
 
             cita = next(
                 (
@@ -234,12 +232,22 @@ class SistemaSalud:
                 for medicamento, dias, cada_cuanto
                 in self._repositorio.obtener_recetas_atencion(codigo)
             ] if hasattr(self._repositorio, "obtener_recetas_atencion") else []
+            profesional_derivado = next(
+                (
+                    profesional
+                    for profesional in self._personal
+                    if profesional.codigo_profesional
+                    == profesional_derivado_codigo
+                ),
+                None,
+            )
             atencion = FabricaEntidades.crear_atencion(
                 codigo,
                 cita,
                 diagnostico,
                 estado,
                 recetas,
+                profesional_derivado,
             )
             self._atenciones.append(atencion)
 
@@ -285,12 +293,6 @@ class SistemaSalud:
         while numero in ocupados:
             numero += 1
         return f"{prefijo}{numero:03d}"
-
-    @staticmethod
-    def validar_codigo_medico(codigo_medico):
-        if str(codigo_medico or "").strip().upper() != "SALUDPRO":
-            raise ValueError("El código médico ingresado no es válido.")
-        return "SALUDPRO"
 
     def generar_codigo_cita(self):
 
@@ -389,11 +391,7 @@ class SistemaSalud:
     def registrar_personal(
         self,
         profesional,
-        codigo_medico=None,
     ):
-
-        if codigo_medico is not None:
-            self.validar_codigo_medico(codigo_medico)
 
         if not isinstance(
             profesional,
@@ -481,6 +479,11 @@ class SistemaSalud:
                 "ya está ocupado."
             )
 
+        if cita.hora not in self.HORARIOS_ATENCION:
+            raise ValueError(
+                "El horario de atención es de 07:00 a 18:00, con turnos cada 30 minutos."
+            )
+
         self._validar_fecha_hora_futura(cita.fecha_hora)
         self._validar_disponibilidad(
             cita.profesional.codigo_profesional,
@@ -498,9 +501,9 @@ class SistemaSalud:
         )
 
     HORARIOS_ATENCION = tuple(
-        (datetime.strptime("08:00", "%H:%M") + timedelta(minutes=30 * paso))
+        (datetime.strptime("07:00", "%H:%M") + timedelta(minutes=30 * paso))
         .strftime("%H:%M")
-        for paso in range(19)
+        for paso in range(22)
     )
 
     def _validar_fecha_hora_futura(self, fecha_hora):
@@ -566,6 +569,112 @@ class SistemaSalud:
                 disponibles.append(hora)
         return disponibles
 
+    def horarios_disponibles_para_cita(self, fecha, paciente_codigo=None):
+        """Devuelve horas con algún médico libre; la asignación prefiere medicina general."""
+        from servicios.validaciones import normalizar_fecha
+
+        fecha_normalizada = normalizar_fecha(fecha)
+        medicos = [
+            profesional
+            for profesional in self._personal
+            if "enfermer" not in profesional.especialidad.casefold()
+        ]
+        horarios = {
+            hora
+            for profesional in medicos
+            for hora in self.horarios_disponibles(
+                profesional.codigo_profesional,
+                fecha_normalizada,
+            )
+        }
+
+        if paciente_codigo:
+            horarios = {
+                hora
+                for hora in horarios
+                if not any(
+                    cita.paciente.codigo == paciente_codigo
+                    and cita.fecha == fecha_normalizada
+                    and cita.hora == hora
+                    and cita.estado in {"Pendiente", "Reprogramada"}
+                    for cita in self._citas
+                )
+            }
+
+        return sorted(horarios)
+
+    def profesionales_disponibles_para_cita(
+        self, fecha, hora, paciente_codigo=None
+    ):
+        """Prefiere médicos generales disponibles y usa otro médico si hace falta."""
+        from servicios.validaciones import normalizar_fecha, normalizar_hora
+
+        fecha_normalizada = normalizar_fecha(fecha)
+        hora_normalizada = normalizar_hora(hora)
+        if hora_normalizada not in self.HORARIOS_ATENCION:
+            return []
+
+        if paciente_codigo and any(
+            cita.paciente.codigo == paciente_codigo
+            and cita.fecha == fecha_normalizada
+            and cita.hora == hora_normalizada
+            and cita.estado in {"Pendiente", "Reprogramada"}
+            for cita in self._citas
+        ):
+            return []
+
+        medicos = [
+            profesional
+            for profesional in self._personal
+            if "enfermer" not in profesional.especialidad.casefold()
+        ]
+        generales = [
+            profesional
+            for profesional in medicos
+            if profesional.especialidad.strip().casefold() == "medicina general"
+        ]
+
+        def disponibles(profesionales):
+            return [
+                profesional
+                for profesional in profesionales
+                if hora_normalizada in self.horarios_disponibles(
+                    profesional.codigo_profesional,
+                    fecha_normalizada,
+                )
+            ]
+
+        candidatos = disponibles(generales)
+        return candidatos or disponibles(medicos)
+
+    def crear_cita_asignacion_automatica(self, paciente, fecha, motivo, hora):
+        """Reserva con asignación aleatoria entre médicos que tienen ese turno libre."""
+        from servicios.validaciones import normalizar_fecha, normalizar_hora
+
+        fecha_normalizada = normalizar_fecha(fecha)
+        hora_normalizada = normalizar_hora(hora)
+        candidatos = self.profesionales_disponibles_para_cita(
+            fecha_normalizada,
+            hora_normalizada,
+            paciente_codigo=paciente.codigo,
+        )
+        if not candidatos:
+            raise ValueError(
+                "Ese horario ya no está disponible. Actualiza la lista y elige otro."
+            )
+
+        cita = Cita(
+            self.generar_codigo_cita(),
+            paciente,
+            random.choice(candidatos),
+            fecha_normalizada,
+            motivo,
+            "Pendiente",
+            hora_normalizada,
+        )
+        self.registrar_cita(cita)
+        return cita
+
     def reprogramar_cita(self, codigo_cita, fecha, hora):
         cita = next(
             (item for item in self._citas if item.codigo == codigo_cita),
@@ -580,6 +689,10 @@ class SistemaSalud:
 
         fecha_nueva = normalizar_fecha(fecha)
         hora_nueva = normalizar_hora(hora)
+        if hora_nueva not in self.HORARIOS_ATENCION:
+            raise ValueError(
+                "El horario de atención es de 07:00 a 18:00, con turnos cada 30 minutos."
+            )
         momento = datetime.strptime(
             f"{fecha_nueva} {hora_nueva}",
             "%d/%m/%Y %H:%M",
@@ -686,7 +799,13 @@ class SistemaSalud:
         # su propio estado (Pendiente, En proceso o Finalizada).
         self.actualizar_estado_cita(cita.codigo, "Atendida")
 
-    def actualizar_atencion(self, codigo_atencion, diagnostico, recetas=None):
+    def actualizar_atencion(
+        self,
+        codigo_atencion,
+        diagnostico,
+        recetas=None,
+        profesional_derivado=None,
+    ):
         atencion = next(
             (item for item in self._atenciones if item.codigo == codigo_atencion),
             None,
@@ -694,9 +813,15 @@ class SistemaSalud:
         if atencion is None:
             raise ValueError("No se encontró la atención médica.")
         atencion.diagnostico = diagnostico
+        atencion.profesional_derivado = profesional_derivado
         self._repositorio.actualizar_diagnostico_atencion(
             codigo_atencion,
             atencion.diagnostico,
+            (
+                atencion.profesional_derivado.codigo_profesional
+                if atencion.profesional_derivado
+                else None
+            ),
         )
         if recetas is not None:
             atencion.recetas = self._validar_recetas(recetas)
@@ -852,6 +977,7 @@ class SistemaSalud:
         stock_minimo,
         precio_venta,
         registrado_por,
+        fecha_fabricacion=None,
     ):
         nombre = str(nombre or "").strip()
         principio_activo = str(principio_activo or "").strip()
@@ -864,19 +990,36 @@ class SistemaSalud:
             raise ValueError("Ingresa el número de lote.")
         if not registrado_por:
             raise ValueError("No se pudo identificar a quien registra el medicamento.")
-        try:
-            vencimiento = datetime.strptime(
-                str(vencimiento).strip(), "%Y-%m-%d"
-            ).date().isoformat()
-        except (TypeError, ValueError):
-            raise ValueError("Usa la fecha de vencimiento AAAA-MM-DD.") from None
+        def normalizar_fecha(valor, etiqueta):
+            texto = str(valor or "").strip()
+            for formato in ("%d/%m/%Y", "%Y-%m-%d"):
+                try:
+                    return datetime.strptime(texto, formato).date()
+                except (TypeError, ValueError):
+                    continue
+            raise ValueError(f"Usa la fecha de {etiqueta} DD/MM/AAAA.")
+
+        fecha_vencimiento = normalizar_fecha(vencimiento, "vencimiento")
+        fecha_fabricacion_normalizada = None
+        if fecha_fabricacion is not None:
+            fecha_fabricacion_normalizada = normalizar_fecha(
+                fecha_fabricacion, "fabricación"
+            )
+            if fecha_fabricacion_normalizada > date.today():
+                raise ValueError("La fecha de fabricación no puede estar en el futuro.")
+            if fecha_vencimiento < fecha_fabricacion_normalizada:
+                raise ValueError(
+                    "El vencimiento no puede ser anterior a la fecha de fabricación."
+                )
+            lote = f"lot-{fecha_fabricacion_normalizada:%d%m%Y}-b"
+        vencimiento = fecha_vencimiento.isoformat()
         stock = self._entero_no_negativo(stock, "El stock")
         if stock == 0:
             raise ValueError("El stock inicial debe ser mayor que cero.")
         stock_minimo = self._entero_no_negativo(
             stock_minimo, "El stock mínimo"
         )
-        if vencimiento < date.today().isoformat():
+        if fecha_vencimiento < date.today():
             raise ValueError("La fecha de vencimiento no puede estar en el pasado.")
         precio_venta = self._precio_medicamento(precio_venta)
         return self._repositorio.guardar_medicamento(

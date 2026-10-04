@@ -10,21 +10,39 @@ Tkinter para la interfaz gráfica y SQLite para guardar la información.
 ## 1. Funcionalidades
 
 - Registro, consulta y búsqueda de pacientes, profesionales y personal de enfermería.
-- Códigos secuenciales independientes para profesionales (CMP001...) y enfermería (MTF001...), sin tope de numeración; las altas administrativas requieren el código médico SALUDPRO.
+- Códigos secuenciales independientes para profesionales (CMP001...) y enfermería (MTF001...), sin tope de numeración. El código médico secreto se solicita al crear la cuenta de acceso del personal.
 - Acceso a los módulos de paciente, profesional, enfermería y administración.
 - Inicio de sesión con cuentas independientes por rol. Los accesos no se
   conceden solo por conocer un código o un DNI.
-- Registro de cuentas de paciente y personal mediante el código y el DNI que
-  ya constan en el sistema; cada cuenta queda vinculada a una sola persona y rol.
+- Las cuentas de personal se vinculan por DNI al registro administrativo o crean
+  un registro nuevo con código automático y código médico autorizado, sin límite
+  de numeración. Las cuentas de paciente existentes se verifican con código y DNI.
 - Autorregistro de pacientes nuevos desde el acceso de Paciente: la persona
-  indica nombre, edad, DNI, usuario y contraseña; el sistema le asigna un código
-  automático (P001, P002...) y crea su cuenta.
+  indica nombre, edad, DNI, usuario y contraseña, sin requerir código médico. Si
+  el DNI ya existe, la cuenta se vincula al paciente registrado; si no, el sistema
+  crea el registro con código automático (P001, P002...).
+- Registro nuevo de profesionales y enfermería desde su acceso: se solicitan
+  nombre, edad, DNI de 8 dígitos y código médico secreto; el sistema asigna
+  automáticamente el código CMP o MTF correspondiente.
 - Portal de enfermería limitado a las citas asignadas al personal registrado
   con especialidad de enfermería.
 - Panel de enfermería con indicadores de citas, stock disponible y ventas del día.
 - Registro de medicamentos por lote, consulta de existencias vigentes y venta
-  con descuento automático del stock. Cada venta queda vinculada al código del
-  paciente y guarda el precio, la cantidad, el usuario responsable y su fecha y hora.
+  con descuento automático del stock. El formulario ofrece cuatro nombres de
+  medicamento y 40 principios activos; al elegir Paracetamol, Ibuprofeno,
+  Amoxicilina o Loratadina, completa el principio activo correspondiente.
+  La fecha se ingresa como DD/MM/AAAA y el lote se genera como
+  `lot-DDMMYYYY-b` a partir de la fecha de fabricación. No se aceptan fechas de
+  fabricación futuras ni vencimientos anteriores al día actual. Cada venta
+  queda vinculada al código del paciente y guarda el precio, la cantidad, el
+  usuario responsable y su fecha y hora.
+- Los campos de fecha aceptan ocho dígitos y colocan automáticamente las barras
+  en formato DD/MM/AAAA.
+- Las citas de pacientes se asignan aleatoriamente a un médico general disponible;
+  si ninguno está libre en el horario elegido, se asigna otro profesional médico
+  disponible. El profesional asignado se muestra al confirmar la cita.
+- Al guardar el diagnóstico, los médicos generales deben seleccionar al especialista
+  que recibirá la derivación. La derivación se conserva en el historial clínico.
 - Recetas por atención médica con medicamento, duración en días y frecuencia;
   aparecen junto con las ventas vinculadas en el historial clínico del paciente.
 - Aceptación obligatoria de los términos y condiciones al crear una cuenta;
@@ -43,8 +61,9 @@ Tkinter para la interfaz gráfica y SQLite para guardar la información.
   queda oculto mientras se consulta el resultado.
 - Registro, consulta, cancelación y reprogramación de citas.
 - Registro y actualización de atenciones médicas e historiales clínicos.
-- Turnos de 30 minutos entre las 08:00 y las 17:00. El sistema rechaza citas
-  pasadas y evita reservar el mismo horario para un profesional.
+- Turnos de 30 minutos entre las 07:00 y las 18:00; el último turno comienza a
+  las 17:30. El sistema rechaza citas pasadas y evita reservar el mismo horario
+  para un profesional.
 - Cancelación automática de citas pendientes o reprogramadas que ya vencieron.
 - Reportes y estadísticas básicas del establecimiento.
 - Desplazamiento vertical con la barra, la rueda del mouse y el touchpad en las
@@ -91,10 +110,13 @@ SistemaRural-PE/
 │   └── modal_verificador.py
 ├── modelos/
 │   ├── persona.py
+│   ├── personal.py
+│   ├── personal_enfermeria.py
 │   ├── paciente.py
 │   ├── personal_salud.py
 │   ├── cita.py
-│   └── atencion_medica.py
+│   ├── atencion_medica.py
+│   └── medicamento_recetado.py
 ├── servicios/
 │   ├── sistema_salud.py
 │   ├── repositorio.py
@@ -108,8 +130,7 @@ SistemaRural-PE/
 ├── pruebas/
 │   ├── test_sistema.py
 │   └── test_patrones.py
-├── datos/
-│   └── salud.db
+├── datos/                  (salud.db se crea al ejecutar)
 ├── imagenes/
 │   └── logo_salupro.png
 ├── main.py
@@ -141,11 +162,18 @@ correspondiente.
 
 - En la primera selección de **Administrativa**, crea la cuenta administrativa
   inicial. El formulario de configuración deja de aparecer después de crearla.
-- Usa el panel administrativo para registrar primero a pacientes y personal.
-- En cada acceso de paciente, profesional o enfermería, selecciona **Crear
-  cuenta de acceso** y valida el código y el DNI del registro existente antes de
-  elegir un usuario y contraseña. Todas las altas nuevas solicitan aceptar los
-  términos y condiciones; el inicio de sesión de cuentas existentes no.
+- Usa el panel administrativo para registrar pacientes y personal. El personal
+  también puede crear su propio registro al crear una cuenta de acceso.
+- En cada acceso de paciente, profesional o enfermería, el paciente selecciona
+  **Crear cuenta de acceso**. Para profesional y enfermería, **Soy personal
+  nuevo** abre directamente un único formulario para registro y acceso. El
+  paciente valida su código y DNI. Profesional y enfermería pueden vincularse a
+  un registro existente mediante el DNI o crear uno nuevo; su código de personal
+  se genera automáticamente. Se solicita el código médico secreto compartido
+  `saludpro2026`. Los campos de DNI aceptan exactamente 8
+  dígitos y los nombres solo letras, tildes, ñ y espacios. Todas las altas nuevas
+  solicitan aceptar los términos y condiciones; el inicio de sesión de cuentas
+  existentes no.
 - El rol de enfermería solo se asigna a registros con especialidad de
   enfermería. El acceso administrativo es independiente y no se puede crear
   desde los formularios de paciente o personal.

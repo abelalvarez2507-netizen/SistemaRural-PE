@@ -43,6 +43,9 @@ def validar_nombre(valor):
 
 def validar_nombre_en_edicion(valor):
     """Permite escribir nombres con letras, espacios y tildes en curso."""
+    if len(valor) > 100:
+        return False
+
     marcas_tilde = {"\u0300", "\u0301", "\u0303", "\u0308"}
     anterior_es_letra = False
 
@@ -57,6 +60,14 @@ def validar_nombre_en_edicion(valor):
             return False
 
     return True
+
+
+def validar_dni_en_edicion(valor):
+    """Limita la escritura del DNI a ocho dígitos ASCII como máximo."""
+    return valor == "" or (
+        len(valor) <= 8
+        and all("0" <= caracter <= "9" for caracter in valor)
+    )
 
 
 def validar_edad(valor):
@@ -77,7 +88,7 @@ def validar_dni(valor):
 
     dni = str(valor).strip()
 
-    if not dni.isdigit():
+    if not dni.isascii() or not dni.isdigit():
         raise ValueError("El DNI debe contener únicamente números.")
 
     if len(dni) != 8:

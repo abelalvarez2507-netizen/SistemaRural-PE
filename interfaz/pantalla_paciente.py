@@ -5,6 +5,7 @@ from datetime import datetime
 from modelos.cita import Cita
 from servicios.sistema_salud import SistemaSalud
 from servicios.validaciones import normalizar_fecha
+from interfaz.campos import configurar_mascara_fecha
 from servicios.validaciones import validar_dni as validar_dni_valor
 
 from interfaz.estilos import (
@@ -321,7 +322,7 @@ class PantallaPaciente:
         tarjeta_reservar = self.crear_tarjeta(
             panel_opciones,
             "Solicitar una cita",
-            "Elige profesional, fecha y un horario libre.",
+            "Elige fecha y horario; el sistema asigna un profesional disponible.",
             self.solicitar_cita
         )
 
@@ -733,11 +734,15 @@ class PantallaPaciente:
         if not self.paciente_autenticado():
             return
 
-        profesionales = self.sistema.obtener_personal()
-        if not profesionales:
+        medicos = [
+            profesional
+            for profesional in self.sistema.obtener_personal()
+            if "enfermer" not in profesional.especialidad.casefold()
+        ]
+        if not medicos:
             messagebox.showwarning(
                 "Sin profesionales",
-                "Todavía no hay profesionales registrados para reservar una cita.",
+                "Todavía no hay médicos registrados para reservar una cita.",
             )
             return
 
@@ -753,20 +758,13 @@ class PantallaPaciente:
         formulario = tk.Frame(pantalla, bg=COLOR_PANEL, padx=24, pady=18)
         formulario.pack(fill="x", padx=60, pady=10)
 
-        tk.Label(formulario, text="Profesional:", bg=COLOR_PANEL, fg=COLOR_TEXTO).pack(anchor="w")
-        profesional_var = tk.StringVar()
-        opciones_profesionales = [
-            f"{profesional.codigo_profesional} · {profesional.nombre} · {profesional.especialidad}"
-            for profesional in profesionales
-        ]
-        profesional_var.set(opciones_profesionales[0])
-        menu_profesional = tk.OptionMenu(
+        tk.Label(
             formulario,
-            profesional_var,
-            *opciones_profesionales,
-        )
-        menu_profesional.configure(bg=COLOR_PANEL_CLARO, fg=COLOR_TEXTO, relief="flat")
-        menu_profesional.pack(anchor="w", pady=(4, 12))
+            text="Atención médica general",
+            bg=COLOR_PANEL,
+            fg=COLOR_TEXTO,
+            font=FUENTE_BOTON,
+        ).pack(anchor="w")
 
         tk.Label(formulario, text="Fecha (DD/MM/AAAA):", bg=COLOR_PANEL, fg=COLOR_TEXTO).pack(anchor="w")
         entrada_fecha = tk.Entry(
@@ -779,6 +777,7 @@ class PantallaPaciente:
             relief="flat",
         )
         entrada_fecha.pack(anchor="w", pady=(4, 12), ipady=6)
+        configurar_mascara_fecha(entrada_fecha)
 
         tk.Label(
             formulario,
@@ -789,7 +788,7 @@ class PantallaPaciente:
         ).pack(anchor="w")
         tk.Label(
             formulario,
-            text="Atención de 08:00 a 17:00. La cita debe ser futura.",
+            text="Atención de 07:00 a 18:00",
             font=("Arial", 9),
             bg=COLOR_PANEL,
             fg=COLOR_GRIS,
@@ -800,23 +799,14 @@ class PantallaPaciente:
         menu_hora.configure(bg=COLOR_PANEL_CLARO, fg=COLOR_TEXTO, relief="flat")
         menu_hora.pack(anchor="w", pady=(0, 12))
 
-        def seleccionado():
-            codigo = profesional_var.get().split(" · ", 1)[0]
-            return next(
-                profesional
-                for profesional in profesionales
-                if profesional.codigo_profesional == codigo
-            )
-
         def actualizar_horarios(event=None):
             try:
                 fecha = normalizar_fecha(entrada_fecha.get())
-                profesional = seleccionado()
-                horarios = self.sistema.horarios_disponibles(
-                    profesional.codigo_profesional,
+                horarios = self.sistema.horarios_disponibles_para_cita(
                     fecha,
+                    paciente_codigo=self.paciente_actual.codigo,
                 )
-            except (ValueError, StopIteration):
+            except ValueError:
                 horarios = []
             menu = menu_hora["menu"]
             menu.delete(0, "end")
@@ -829,7 +819,7 @@ class PantallaPaciente:
                 hora_var.set(horarios[0])
             else:
                 menu.add_command(
-                    label="Primero ingresa una fecha futura",
+                    label="Ingrese una fecha valida",
                     command=lambda: None,
                 )
                 hora_var.set("")
@@ -850,7 +840,6 @@ class PantallaPaciente:
         self._boton_cita.pack(anchor="w", pady=(0, 12))
         entrada_fecha.bind("<FocusOut>", actualizar_horarios)
         entrada_fecha.bind("<Return>", actualizar_horarios)
-        profesional_var.trace_add("write", lambda *_args: actualizar_horarios())
 
         tk.Label(formulario, text="Motivo de la cita:", bg=COLOR_PANEL, fg=COLOR_TEXTO).pack(anchor="w")
         entrada_motivo = tk.Entry(
@@ -865,26 +854,21 @@ class PantallaPaciente:
 
         def guardar():
             try:
-                profesional = seleccionado()
                 fecha = normalizar_fecha(entrada_fecha.get())
                 if not hora_var.get():
                     raise ValueError("Selecciona un horario disponible.")
-                cita = Cita(
-                    self.sistema.generar_codigo_cita(),
+                cita = self.sistema.crear_cita_asignacion_automatica(
                     self.paciente_actual,
-                    profesional,
                     fecha,
                     entrada_motivo.get(),
-                    "Pendiente",
                     hora_var.get(),
                 )
-                self.sistema.registrar_cita(cita)
                 messagebox.showinfo(
                     "Cita solicitada",
-                    f"Tu cita quedó registrada para el {cita.fecha} a las {cita.hora}.",
+                    f"Tu cita quedó registrada para el {cita.fecha} a las {cita.hora} con {cita.profesional.nombre} ({cita.profesional.especialidad}).",
                 )
                 self.crear_interfaz()
-            except (ValueError, StopIteration) as error:
+            except ValueError as error:
                 messagebox.showerror("No se pudo registrar la cita", str(error))
 
         tk.Button(
@@ -1187,6 +1171,14 @@ class PantallaPaciente:
                         f"{atencion.diagnostico}\n"
                     )
                 )
+
+                if atencion.profesional_derivado:
+                    texto.insert(
+                        tk.END,
+                        "Derivación: "
+                        f"{atencion.profesional_derivado.nombre} · "
+                        f"{atencion.profesional_derivado.especialidad}\n",
+                    )
 
                 texto.insert(
                     tk.END,

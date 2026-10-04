@@ -1,6 +1,6 @@
 """Portal de enfermería con agenda, inventario y ventas de medicamentos."""
 
-from datetime import date
+from datetime import date, datetime
 import tkinter as tk
 from tkinter import ttk
 
@@ -20,8 +20,60 @@ from interfaz.estilos import (
     FUENTE_TITULO,
 )
 from interfaz.navegacion import VistaDesplazable, instalar_navegacion
+from interfaz.campos import configurar_mascara_fecha
 from servicios.autenticacion import ServicioAutenticacion
 from servicios.sistema_salud import SistemaSalud
+
+
+PRODUCTOS_MEDICAMENTO = {
+    "Paracetamol": "Paracetamol",
+    "Ibuprofeno": "Ibuprofeno",
+    "Amoxicilina": "Amoxicilina",
+    "Loratadina": "Loratadina",
+}
+
+PRINCIPIOS_ACTIVOS = (
+    "Paracetamol",
+    "Ibuprofeno",
+    "Amoxicilina",
+    "Loratadina",
+    "Ácido acetilsalicílico",
+    "Diclofenaco",
+    "Naproxeno",
+    "Ketorolaco",
+    "Amoxicilina + ácido clavulánico",
+    "Ampicilina",
+    "Azitromicina",
+    "Claritromicina",
+    "Cefalexina",
+    "Ceftriaxona",
+    "Ciprofloxacino",
+    "Doxiciclina",
+    "Eritromicina",
+    "Metronidazol",
+    "Nitrofurantoína",
+    "Sulfametoxazol + trimetoprima",
+    "Clindamicina",
+    "Cetirizina",
+    "Clorfenamina",
+    "Omeprazol",
+    "Pantoprazol",
+    "Metoclopramida",
+    "Ondansetrón",
+    "Loperamida",
+    "Metformina",
+    "Glibenclamida",
+    "Insulina humana",
+    "Enalapril",
+    "Losartán",
+    "Amlodipino",
+    "Hidroclorotiazida",
+    "Furosemida",
+    "Atorvastatina",
+    "Levotiroxina",
+    "Salbutamol",
+    "Prednisona",
+)
 
 
 class PantallaEnfermeria:
@@ -401,7 +453,45 @@ class PantallaEnfermeria:
             anchor="w",
         ).grid(row=fila, column=columna, sticky="ew", padx=7, pady=(5, 2))
 
-    def _entrada_campo(self, padre, campos, clave, texto, fila, columna):
+    def _poner_placeholder(self, campo, texto, solo_lectura=False):
+        campo.placeholder_activo = True
+        campo.placeholder_texto = texto
+        campo.insert(0, texto)
+        campo.configure(fg=COLOR_GRIS)
+        if solo_lectura:
+            return
+
+        def quitar(_evento=None):
+            if campo.placeholder_activo:
+                campo.delete(0, tk.END)
+                campo.configure(fg=COLOR_TEXTO)
+                campo.placeholder_activo = False
+
+        def restaurar(_evento=None):
+            if not campo.get().strip():
+                campo.insert(0, texto)
+                campo.configure(fg=COLOR_GRIS)
+                campo.placeholder_activo = True
+
+        campo.bind("<FocusIn>", quitar, add="+")
+        campo.bind("<FocusOut>", restaurar, add="+")
+
+    def _valor_campo(self, campo):
+        if getattr(campo, "placeholder_activo", False):
+            return ""
+        return campo.get().strip()
+
+    def _entrada_campo(
+        self,
+        padre,
+        campos,
+        clave,
+        texto,
+        fila,
+        columna,
+        placeholder=None,
+        solo_lectura=False,
+    ):
         self._etiqueta_campo(padre, texto, fila, columna)
         entrada = tk.Entry(
             padre,
@@ -413,8 +503,60 @@ class PantallaEnfermeria:
             bd=0,
         )
         entrada.grid(row=fila + 1, column=columna, sticky="ew", padx=7, pady=(0, 7), ipady=7)
+        if placeholder:
+            self._poner_placeholder(entrada, placeholder, solo_lectura)
+        if solo_lectura:
+            entrada.configure(state="readonly")
         campos[clave] = entrada
         return entrada
+
+    def _combo_campo(
+        self,
+        padre,
+        campos,
+        clave,
+        texto,
+        fila,
+        columna,
+        opciones,
+        placeholder,
+        al_seleccionar=None,
+    ):
+        self._etiqueta_campo(padre, texto, fila, columna)
+        campo = ttk.Combobox(
+            padre,
+            values=(placeholder, *opciones),
+            state="readonly",
+            font=("Arial", 11),
+        )
+        campo.grid(
+            row=fila + 1,
+            column=columna,
+            sticky="ew",
+            padx=7,
+            pady=(0, 7),
+            ipady=5,
+        )
+        campo.set(placeholder)
+        campo.placeholder_activo = True
+        campo.configure(foreground=COLOR_GRIS)
+
+        def seleccion(_evento=None):
+            campo.placeholder_activo = campo.get() == placeholder
+            campo.configure(
+                foreground=COLOR_GRIS if campo.placeholder_activo else COLOR_TEXTO
+            )
+            if al_seleccionar:
+                al_seleccionar(campo.get())
+
+        campo.bind("<<ComboboxSelected>>", seleccion)
+        campos[clave] = campo
+        return campo
+
+    def _configurar_fecha(self, campo, al_cambiar=None):
+        configurar_mascara_fecha(campo, al_cambiar)
+        if al_cambiar:
+            campo.bind("<FocusOut>", lambda _evento: al_cambiar(), add="+")
 
     def _lista_medicamentos(self, padre, medicamentos):
         if not medicamentos:
@@ -493,17 +635,84 @@ class PantallaEnfermeria:
         formulario.columnconfigure(0, weight=1, uniform="campos_medicamento")
         formulario.columnconfigure(1, weight=1, uniform="campos_medicamento")
         campos = {}
-        self._entrada_campo(formulario, campos, "nombre", "Nombre del medicamento *", 0, 0)
-        self._entrada_campo(formulario, campos, "principio_activo", "Principio activo", 0, 1)
-        self._entrada_campo(formulario, campos, "presentacion", "Presentación (tableta, frasco...) ", 2, 0)
-        self._entrada_campo(formulario, campos, "lote", "Número de lote *", 2, 1)
-        vencimiento = self._entrada_campo(
-            formulario, campos, "vencimiento", "Vencimiento (AAAA-MM-DD) *", 4, 0
+        nombre = self._combo_campo(
+            formulario,
+            campos,
+            "nombre",
+            "Nombre del medicamento *",
+            0,
+            0,
+            tuple(PRODUCTOS_MEDICAMENTO),
+            "Selecciona uno de los 4 medicamentos",
         )
-        vencimiento.insert(0, date.today().replace(year=date.today().year + 1).isoformat())
-        self._entrada_campo(formulario, campos, "stock", "Stock inicial *", 4, 1)
-        self._entrada_campo(formulario, campos, "stock_minimo", "Stock mínimo", 6, 0)
-        self._entrada_campo(formulario, campos, "precio_venta", "Precio por unidad (S/) *", 6, 1)
+        principio = self._combo_campo(
+            formulario,
+            campos,
+            "principio_activo",
+            "Principio activo *",
+            0,
+            1,
+            PRINCIPIOS_ACTIVOS,
+            "Selecciona el principio activo",
+        )
+
+        def completar_principio(medicamento):
+            activo = PRODUCTOS_MEDICAMENTO.get(medicamento)
+            if activo:
+                principio.set(activo)
+                principio.placeholder_activo = False
+                principio.configure(foreground=COLOR_TEXTO)
+
+        nombre.bind("<<ComboboxSelected>>", lambda _evento: completar_principio(nombre.get()), add="+")
+        self._entrada_campo(
+            formulario,
+            campos,
+            "presentacion",
+            "Presentación *",
+            2,
+            0,
+            placeholder="Ej.: tableta de 500 mg",
+        )
+        lote = self._entrada_campo(
+            formulario,
+            campos,
+            "lote",
+            "Número de lote *",
+            2,
+            1,
+            placeholder="Ej.: lot-25072026-b",
+            solo_lectura=True,
+        )
+        fabricacion = self._entrada_campo(
+            formulario,
+            campos,
+            "fabricacion",
+            "Fecha de fabricación (DD/MM/AAAA) *",
+            4,
+            0,
+            placeholder="Ej.: 25/07/2026",
+        )
+        vencimiento = self._entrada_campo(
+            formulario,
+            campos,
+            "vencimiento",
+            "Vencimiento (DD/MM/AAAA) *",
+            4,
+            1,
+            placeholder="Ej.: 25/07/2027",
+        )
+        self._entrada_campo(
+            formulario, campos, "stock", "Stock inicial *", 6, 0,
+            placeholder="Ej.: 100",
+        )
+        self._entrada_campo(
+            formulario, campos, "stock_minimo", "Stock mínimo", 6, 1,
+            placeholder="Ej.: 10",
+        )
+        self._entrada_campo(
+            formulario, campos, "precio_venta", "Precio por unidad (S/) *", 8, 0,
+            placeholder="Ej.: 1.50",
+        )
         estado = tk.Label(
             panel,
             text=mensaje,
@@ -515,18 +724,60 @@ class PantallaEnfermeria:
         )
         estado.pack(fill="x", pady=(2, 8))
 
+        def actualizar_lote():
+            if getattr(fabricacion, "placeholder_activo", False):
+                valor = ""
+            else:
+                valor = fabricacion.get().strip()
+            try:
+                fecha = datetime.strptime(valor, "%d/%m/%Y").date()
+                if fecha > date.today():
+                    raise ValueError
+                generado = f"lot-{fecha:%d%m%Y}-b"
+                lote.configure(state="normal", fg=COLOR_TEXTO)
+                lote.delete(0, tk.END)
+                lote.insert(0, generado)
+                lote.placeholder_activo = False
+                lote.configure(state="readonly")
+            except ValueError:
+                lote.configure(state="normal")
+                lote.delete(0, tk.END)
+                lote.insert(0, "Ej.: lot-25072026-b")
+                lote.placeholder_activo = True
+                lote.configure(state="readonly", fg=COLOR_GRIS)
+
+        def validar_vencimiento():
+            valor = self._valor_campo(vencimiento)
+            if not valor:
+                return
+            try:
+                fecha = datetime.strptime(valor, "%d/%m/%Y").date()
+            except ValueError:
+                return
+            if fecha < date.today():
+                estado.configure(
+                    text="La fecha de vencimiento no puede ser anterior a hoy.",
+                    fg=COLOR_ROJO,
+                )
+            elif estado.cget("text") == "La fecha de vencimiento no puede ser anterior a hoy.":
+                estado.configure(text="", fg=COLOR_GRIS)
+
+        self._configurar_fecha(fabricacion, actualizar_lote)
+        self._configurar_fecha(vencimiento, validar_vencimiento)
+
         def guardar():
             try:
                 self.sistema.registrar_medicamento(
-                    campos["nombre"].get(),
-                    campos["principio_activo"].get(),
-                    campos["presentacion"].get(),
-                    campos["lote"].get(),
-                    campos["vencimiento"].get(),
-                    campos["stock"].get(),
-                    campos["stock_minimo"].get() or "0",
-                    campos["precio_venta"].get(),
+                    self._valor_campo(campos["nombre"]),
+                    self._valor_campo(campos["principio_activo"]),
+                    self._valor_campo(campos["presentacion"]),
+                    self._valor_campo(campos["lote"]),
+                    self._valor_campo(campos["vencimiento"]),
+                    self._valor_campo(campos["stock"]),
+                    self._valor_campo(campos["stock_minimo"]) or "0",
+                    self._valor_campo(campos["precio_venta"]),
                     self.enfermero_actual.nombre,
+                    fecha_fabricacion=self._valor_campo(campos["fabricacion"]),
                 )
             except Exception as error:
                 estado.configure(text=str(error), fg=COLOR_ROJO)

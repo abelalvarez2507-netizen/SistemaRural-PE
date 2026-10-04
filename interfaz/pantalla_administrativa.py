@@ -13,8 +13,10 @@ from servicios.sistema_salud import SistemaSalud
 from servicios.reportes import Reportes
 from servicios.validaciones import (
     validar_dni as validar_dni_valor,
+    validar_dni_en_edicion,
     validar_nombre_en_edicion,
 )
+from interfaz.campos import configurar_mascara_fecha
 
 from interfaz.estilos import (
     COLOR_FONDO,
@@ -2560,20 +2562,8 @@ class VentanaPrincipal:
 
         entrada.pack()
 
-        def validar_caracteres(
-            nuevo_valor
-        ):
-
-            if nuevo_valor == "":
-                return True
-
-            return (
-                nuevo_valor.isdigit()
-                and len(nuevo_valor) <= 8
-            )
-
         validacion = ventana.register(
-            validar_caracteres
+            validar_dni_en_edicion
         )
 
         entrada.config(
@@ -2671,6 +2661,7 @@ class VentanaPrincipal:
             "DD/MM/AAAA"
         )
 
+        entrada.placeholder_texto = "DD/MM/AAAA"
         entrada.placeholder_activo = True
 
         def entrar(evento):
@@ -2703,65 +2694,6 @@ class VentanaPrincipal:
 
                 entrada.placeholder_activo = True
 
-        def formatear(evento):
-
-            if entrada.placeholder_activo:
-                return
-
-            if evento.keysym in (
-                "BackSpace",
-                "Delete",
-                "Left",
-                "Right",
-                "Up",
-                "Down",
-                "Tab"
-            ):
-                return
-
-            contenido = entrada.get()
-
-            solo_numeros = "".join(
-                caracter
-                for caracter in contenido
-                if caracter.isdigit()
-            )
-
-            solo_numeros = solo_numeros[:8]
-
-            if len(solo_numeros) >= 5:
-
-                contenido_formateado = (
-                    solo_numeros[:2]
-                    + "/"
-                    + solo_numeros[2:4]
-                    + "/"
-                    + solo_numeros[4:]
-                )
-
-            elif len(solo_numeros) >= 3:
-
-                contenido_formateado = (
-                    solo_numeros[:2]
-                    + "/"
-                    + solo_numeros[2:]
-                )
-
-            else:
-
-                contenido_formateado = (
-                    solo_numeros
-                )
-
-            entrada.delete(
-                0,
-                tk.END
-            )
-
-            entrada.insert(
-                0,
-                contenido_formateado
-            )
 
         entrada.bind(
             "<FocusIn>",
@@ -2773,12 +2705,7 @@ class VentanaPrincipal:
             salir
         )
 
-        entrada.bind(
-            "<KeyRelease>",
-            formatear
-        )
-
-        return entrada
+        return configurar_mascara_fecha(entrada)
 
     # =========================================================
     # VALIDAR FECHA
@@ -2822,7 +2749,7 @@ class VentanaPrincipal:
         """Muestra debajo de la fecha los turnos libres del profesional."""
         tk.Label(
             contenedor,
-            text="Horarios disponibles (turnos de 30 minutos, 08:00–17:00):",
+            text="Horarios disponibles (turnos de 30 minutos, 07:00–18:00; último inicio 17:30):",
             font=FUENTE_NORMAL_BOLD,
         ).pack(pady=(8, 4))
         hora_var = tk.StringVar(value="")
@@ -2968,20 +2895,8 @@ class VentanaPrincipal:
 
         entrada_dni.pack()
 
-        def validar_dni_tecla(
-            nuevo_valor
-        ):
-
-            if nuevo_valor == "":
-                return True
-
-            return (
-                nuevo_valor.isdigit()
-                and len(nuevo_valor) <= 8
-            )
-
         validacion = ventana.register(
-            validar_dni_tecla
+            validar_dni_en_edicion
         )
 
         entrada_dni.config(
@@ -3441,36 +3356,6 @@ class VentanaPrincipal:
             )
         )
 
-        barra_acciones = tk.Frame(
-            contenedor,
-            bg=COLOR_FONDO
-        )
-
-        barra_acciones.pack(
-            fill="x",
-            pady=(0, 5)
-        )
-
-        boton_volver_inferior = tk.Button(
-            barra_acciones,
-            text="←  Volver",
-            command=boton_volver.invoke,
-            font=FUENTE_BOTON,
-            bg=COLOR_PANEL_CLARO,
-            fg=COLOR_TEXTO,
-            activebackground=COLOR_ROJO,
-            activeforeground=COLOR_BLANCO,
-            relief="flat",
-            bd=0,
-            cursor="hand2",
-            width=15,
-            pady=9
-        )
-
-        boton_volver_inferior.pack(
-            side="left"
-        )
-
         entrada_busqueda.bind(
             "<Return>",
             lambda evento:
@@ -3552,28 +3437,6 @@ class VentanaPrincipal:
 
         tk.Label(
             ventana,
-            text="Código de enfermería:" if es_enfermeria else "Código profesional:",
-        ).pack(
-            pady=5
-        )
-
-        tk.Label(
-            ventana,
-            text=codigo_generado,
-            font=("Arial", 14, "bold")
-        ).pack(
-            pady=5
-        )
-
-        tk.Label(
-            ventana,
-            text="Código médico de autorización (SALUDPRO):"
-        ).pack(pady=(12, 5))
-        entrada_codigo_medico = tk.Entry(ventana, width=35, show="*")
-        entrada_codigo_medico.pack()
-
-        tk.Label(
-            ventana,
             text="DNI:"
         ).pack(
             pady=5
@@ -3586,20 +3449,8 @@ class VentanaPrincipal:
 
         entrada_dni.pack()
 
-        def validar_dni_tecla(
-            nuevo_valor
-        ):
-
-            if nuevo_valor == "":
-                return True
-
-            return (
-                nuevo_valor.isdigit()
-                and len(nuevo_valor) <= 8
-            )
-
         validacion = ventana.register(
-            validar_dni_tecla
+            validar_dni_en_edicion
         )
 
         entrada_dni.config(
@@ -3645,7 +3496,7 @@ class VentanaPrincipal:
 
         tk.Label(
             ventana,
-            text="Especialidad:"
+            text="Área de enfermería:" if es_enfermeria else "Especialidad:",
         ).pack(
             pady=5
         )
@@ -3663,9 +3514,7 @@ class VentanaPrincipal:
         ]
 
         especialidad_var = tk.StringVar(value="Enfermería" if es_enfermeria else especialidades[0])
-        if es_enfermeria:
-            tk.Label(ventana, text="Enfermería").pack()
-        else:
+        if not es_enfermeria:
             tk.OptionMenu(ventana, especialidad_var, *especialidades).pack()
 
         def guardar():
@@ -3676,8 +3525,6 @@ class VentanaPrincipal:
                     entrada_dni.get()
                 )
 
-                if not entrada_codigo_medico.get().strip():
-                    raise ValueError("Ingresa el código médico SALUDPRO para continuar.")
                 clase_personal = PersonalEnfermeria if es_enfermeria else PersonalSalud
                 profesional = clase_personal(
                     codigo_generado,
@@ -3687,10 +3534,7 @@ class VentanaPrincipal:
                     especialidad_var.get(),
                 )
 
-                self.sistema.registrar_personal(
-                    profesional,
-                    entrada_codigo_medico.get(),
-                )
+                self.sistema.registrar_personal(profesional)
 
                 messagebox.showinfo(
                     "Éxito",

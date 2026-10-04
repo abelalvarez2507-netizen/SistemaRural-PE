@@ -228,7 +228,7 @@ class PantallaInicio:
 
         self._id_subtitulo = lienzo.create_text(
             0, 0,
-            text="Selecciona tu rol. Cada acceso requiere una cuenta verificada.",
+            text="Selecciona tu tipo de acceso",
             font=FUENTE_SUBTITULO,
             fill=COLOR_GRIS_CLARO,
         )
@@ -320,7 +320,7 @@ class PantallaInicio:
 
         self._id_pie = lienzo.create_text(
             0, 0,
-            text="Sistema de Salud Rural · acceso protegido por roles",
+            text="",
             font=("Arial", 9),
             fill=COLOR_GRIS,
         )

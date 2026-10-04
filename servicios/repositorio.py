@@ -82,7 +82,8 @@ class RepositorioSalud:
                 codigo TEXT PRIMARY KEY,
                 cita_codigo TEXT NOT NULL,
                 diagnostico TEXT NOT NULL,
-                estado TEXT NOT NULL
+                estado TEXT NOT NULL,
+                profesional_derivado_codigo TEXT
             )
             """
         )
@@ -289,6 +290,17 @@ class RepositorioSalud:
         if "hora" not in columnas_citas:
             cursor.execute(
                 "ALTER TABLE citas ADD COLUMN hora TEXT NOT NULL DEFAULT '09:00'"
+            )
+
+        columnas_atenciones = [
+            fila[1]
+            for fila in cursor.execute(
+                "PRAGMA table_info(atenciones)"
+            ).fetchall()
+        ]
+        if "profesional_derivado_codigo" not in columnas_atenciones:
+            cursor.execute(
+                "ALTER TABLE atenciones ADD COLUMN profesional_derivado_codigo TEXT"
             )
 
         # -----------------------------------------------------
@@ -551,6 +563,59 @@ class RepositorioSalud:
                 "El código puede estar duplicado."
             ) from error
 
+    def guardar_personal_con_cuenta(
+        self,
+        profesional,
+        usuario,
+        rol,
+        password_hash,
+        password_salt,
+    ):
+        """Guarda el registro nuevo y su cuenta dentro de una sola transacción."""
+        try:
+            with self._conexion:
+                self._conexion.execute(
+                    """
+                    INSERT INTO personal
+                    (
+                        codigo_profesional,
+                        dni_hash,
+                        dni_salt,
+                        nombre,
+                        edad,
+                        especialidad
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        profesional.codigo_profesional,
+                        profesional.dni_hash,
+                        profesional.dni_salt,
+                        profesional.nombre,
+                        profesional.edad,
+                        profesional.especialidad,
+                    ),
+                )
+                self._conexion.execute(
+                    """
+                    INSERT INTO cuentas_acceso
+                    (usuario, rol, codigo_referencia, password_hash, password_salt)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        usuario,
+                        rol,
+                        profesional.codigo_profesional,
+                        password_hash,
+                        password_salt,
+                    ),
+                )
+        except sqlite3.IntegrityError as error:
+            raise ValueError(
+                "No se pudo crear la cuenta. El usuario, el DNI o el código "
+                "ya están registrados."
+            ) from error
+
     def obtener_personal(self):
 
         cursor = self._conexion.cursor()
@@ -590,6 +655,20 @@ class RepositorioSalud:
             """,
             (codigo.strip(),),
         ).fetchone()
+
+    def obtener_datos_personal_por_dni(self, dni):
+        """Busca el registro de personal verificando el DNI protegido."""
+        filas = self._conexion.execute(
+            """
+            SELECT codigo_profesional, dni_hash, dni_salt, especialidad
+            FROM personal
+            WHERE dni_hash IS NOT NULL AND dni_salt IS NOT NULL
+            """
+        ).fetchall()
+        for codigo, resumen, sal, especialidad in filas:
+            if SeguridadDatos.verificar(dni, sal, resumen):
+                return codigo, resumen, sal, especialidad
+        return None
 
     def obtener_cuenta_acceso(self, usuario):
         return self._conexion.execute(
@@ -790,15 +869,21 @@ class RepositorioSalud:
                         codigo,
                         cita_codigo,
                         diagnostico,
-                        estado
+                        estado,
+                        profesional_derivado_codigo
                     )
-                    VALUES (?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?)
                     """,
                     (
                         atencion.codigo,
                         atencion.cita.codigo,
                         atencion.diagnostico,
-                        atencion.estado
+                        atencion.estado,
+                        (
+                            atencion.profesional_derivado.codigo_profesional
+                            if atencion.profesional_derivado
+                            else None
+                        ),
                     )
                 )
                 self._guardar_recetas_en_transaccion(atencion.codigo, atencion.recetas)
@@ -859,7 +944,8 @@ class RepositorioSalud:
                 codigo,
                 cita_codigo,
                 diagnostico,
-                estado
+                estado,
+                profesional_derivado_codigo
             FROM atenciones
             ORDER BY codigo
             """
@@ -885,11 +971,20 @@ class RepositorioSalud:
                 )
             )
 
-    def actualizar_diagnostico_atencion(self, codigo_atencion, diagnostico):
+    def actualizar_diagnostico_atencion(
+        self,
+        codigo_atencion,
+        diagnostico,
+        profesional_derivado_codigo=None,
+    ):
         with self._conexion:
             self._conexion.execute(
-                "UPDATE atenciones SET diagnostico = ? WHERE codigo = ?",
-                (diagnostico, codigo_atencion),
+                """
+                UPDATE atenciones
+                SET diagnostico = ?, profesional_derivado_codigo = ?
+                WHERE codigo = ?
+                """,
+                (diagnostico, profesional_derivado_codigo, codigo_atencion),
             )
 
     # =========================================================
