@@ -251,15 +251,16 @@ class PantallaEnfermeria:
             wraplength=350,
             justify="left",
         ).grid(row=1, column=0, sticky="w", pady=(4, 3))
-        tk.Label(
-            tarjeta,
-            text=descripcion,
-            font=("Arial", 9),
-            fg=COLOR_GRIS,
-            bg=COLOR_PANEL,
-            wraplength=350,
-            justify="left",
-        ).grid(row=2, column=0, sticky="w", pady=(0, 12))
+        if descripcion:
+            tk.Label(
+                tarjeta,
+                text=descripcion,
+                font=("Arial", 9),
+                fg=COLOR_GRIS,
+                bg=COLOR_PANEL,
+                wraplength=350,
+                justify="left",
+            ).grid(row=2, column=0, sticky="w", pady=(0, 12))
         self._boton(tarjeta, "Abrir", comando, principal=True).grid(
             row=3, column=0, sticky="ew"
         )
@@ -319,7 +320,7 @@ class PantallaEnfermeria:
             0,
             "＋",
             "Registrar medicamentos",
-            "Registra lote, vencimiento, stock inicial y precio de venta.",
+            "",
             self.mostrar_registro_medicamentos,
         )
         self._crear_modulo(
@@ -328,7 +329,7 @@ class PantallaEnfermeria:
             1,
             "▤",
             "Medicamentos disponibles",
-            "Consulta lotes vigentes, existencias, precios y stock mínimo.",
+            "",
             self.mostrar_medicamentos_disponibles,
         )
         self._crear_modulo(
@@ -337,7 +338,7 @@ class PantallaEnfermeria:
             0,
             "S/",
             "Registrar venta",
-            "Selecciona medicamentos del inventario y descuenta el stock al vender.",
+            "",
             self.mostrar_ventas,
         )
         self._crear_modulo(
@@ -346,7 +347,7 @@ class PantallaEnfermeria:
             1,
             "◷",
             "Agenda asignada",
-            "Consulta las citas vinculadas a tu cuenta de enfermería.",
+            "",
             self.mostrar_agenda,
         )
 
@@ -625,7 +626,7 @@ class PantallaEnfermeria:
     def mostrar_registro_medicamentos(self, mensaje=""):
         contenido = self._iniciar_pantalla(
             "Registrar medicamentos",
-            "Agrega existencias por lote para que aparezcan en el inventario y en el formulario de venta.",
+            "",
             mostrar_volver=True,
         )
         panel = self._tarjeta(contenido, "Datos del medicamento")
@@ -643,7 +644,7 @@ class PantallaEnfermeria:
             0,
             0,
             tuple(PRODUCTOS_MEDICAMENTO),
-            "Selecciona uno de los 4 medicamentos",
+            "Selecciona medicamento",
         )
         principio = self._combo_campo(
             formulario,
@@ -692,15 +693,15 @@ class PantallaEnfermeria:
             placeholder="Ej.: 25/07/2027",
         )
         self._entrada_campo(
-            formulario, campos, "stock", "Stock inicial *", 6, 0,
+            formulario, campos, "stock", "Stock inicial *", 4, 1,
             placeholder="Ej.: 100",
         )
         self._entrada_campo(
-            formulario, campos, "stock_minimo", "Stock mínimo", 6, 1,
+            formulario, campos, "stock_minimo", "Stock mínimo", 6, 0,
             placeholder="Ej.: 10",
         )
         self._entrada_campo(
-            formulario, campos, "precio_venta", "Precio por unidad (S/) *", 8, 0,
+            formulario, campos, "precio_venta", "Precio por unidad (S/) *", 6, 1,
             placeholder="Ej.: 1.50",
         )
         estado = tk.Label(
@@ -749,7 +750,7 @@ class PantallaEnfermeria:
                 estado.configure(text=str(error), fg=COLOR_ROJO)
                 return
             self.mostrar_registro_medicamentos(
-                "Registrado correctamente. Ya aparece en el inventario disponible y en ventas cuando tiene stock vigente."
+                "Registrado."
             )
 
         self._boton(panel, "Guardar medicamento", guardar, principal=True).pack(
@@ -807,7 +808,7 @@ class PantallaEnfermeria:
     def mostrar_ventas(self, mensaje=""):
         contenido = self._iniciar_pantalla(
             "Registrar venta de medicamentos",
-            "La lista se alimenta del inventario registrado y vigente. Al guardar se descuenta la cantidad vendida.",
+            "",
             mostrar_volver=True,
         )
         panel = self._tarjeta(contenido, "Nueva venta")

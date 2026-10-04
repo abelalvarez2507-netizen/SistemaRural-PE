@@ -620,8 +620,7 @@ class VentanaPrincipal:
         tk.Label(
             titulo_info,
             text=(
-                "Todo el centro de salud en un solo lugar: "
-                "pacientes, profesionales, citas, atenciones y reportes."
+                ""
             ),
             font=FUENTE_SUBTITULO,
             bg=COLOR_FONDO,
@@ -686,7 +685,7 @@ class VentanaPrincipal:
 
         tk.Label(
             instrucciones_busqueda,
-            text="Código de paciente, profesional o enfermería, o DNI de 8 dígitos.",
+            text="Código o DNI.",
             font=FUENTE_PEQUENA,
             bg=COLOR_PANEL,
             fg=COLOR_GRIS,
@@ -1679,19 +1678,20 @@ class VentanaPrincipal:
                 padx=9
             )
 
-            tk.Label(
-                tarjeta,
-                text=descripcion,
-                font=FUENTE_PEQUENA,
-                bg=COLOR_PANEL,
-                fg=COLOR_GRIS,
-                wraplength=290,
-                justify="left"
-            ).pack(
-                anchor="w",
-                padx=16,
-                pady=(0, 10)
-            )
+            if descripcion:
+                tk.Label(
+                    tarjeta,
+                    text=descripcion,
+                    font=FUENTE_PEQUENA,
+                    bg=COLOR_PANEL,
+                    fg=COLOR_GRIS,
+                    wraplength=290,
+                    justify="left"
+                ).pack(
+                    anchor="w",
+                    padx=16,
+                    pady=(0, 10)
+                )
 
             estadistica = tk.Frame(
                 tarjeta,
@@ -1773,10 +1773,7 @@ class VentanaPrincipal:
             0,
             "👥",
             "GESTIÓN DE PACIENTES",
-            (
-                "Registre pacientes, consulte sus datos "
-                "y revise su historial clínico."
-            ),
+            "",
             len(pacientes),
             "pacientes registrados",
             "Gestionar pacientes",
@@ -1788,10 +1785,7 @@ class VentanaPrincipal:
             1,
             "⚕",
             "GESTIÓN DE PROFESIONALES",
-            (
-                "Administre el personal de salud "
-                "y consulte la actividad registrada."
-            ),
+            "",
             sum(not self._es_personal_enfermeria(p) for p in personal),
             "profesionales registrados",
             "Gestionar profesionales",
@@ -1803,10 +1797,7 @@ class VentanaPrincipal:
             0,
             "📅",
             "GESTIÓN DE CITAS",
-            (
-                "Administre la agenda, los estados "
-                "y las citas que requieren seguimiento."
-            ),
+            "",
             len(citas),
             "citas en agenda",
             "Gestionar citas",
@@ -1818,7 +1809,7 @@ class VentanaPrincipal:
             2,
             "♧",
             "GESTIÓN DE ENFERMERÍA",
-            "Registre, consulte y busque personal de enfermería.",
+            "",
             sum(self._es_personal_enfermeria(p) for p in personal),
             "personas registradas",
             "Gestionar enfermería",
@@ -1830,10 +1821,7 @@ class VentanaPrincipal:
             1,
             "🩺",
             "ATENCIONES MÉDICAS",
-            (
-                "Registre diagnósticos, consulte atenciones "
-                "y actualice sus estados."
-            ),
+            "",
             len(atenciones),
             "atenciones registradas",
             "Gestionar atenciones",
@@ -1845,10 +1833,7 @@ class VentanaPrincipal:
             2,
             "📊",
             "REPORTES Y ESTADÍSTICAS",
-            (
-                "Consulte indicadores generales y reportes "
-                "de pacientes, citas y atenciones."
-            ),
+            "",
             len(finalizadas),
             "atenciones finalizadas",
             "Ver reportes",
@@ -2275,17 +2260,18 @@ class VentanaPrincipal:
             pady=(5, 6)
         )
 
-        tk.Label(
-            contenedor,
-            text=descripcion,
-            font=FUENTE_SUBTITULO,
-            bg=COLOR_FONDO,
-            fg=COLOR_GRIS,
-            wraplength=650,
-            justify="center"
-        ).pack(
-            pady=(0, 20)
-        )
+        if descripcion:
+            tk.Label(
+                contenedor,
+                text=descripcion,
+                font=FUENTE_SUBTITULO,
+                bg=COLOR_FONDO,
+                fg=COLOR_GRIS,
+                wraplength=650,
+                justify="center"
+            ).pack(
+                pady=(0, 20)
+            )
 
         tk.Frame(
             contenedor,
@@ -2374,10 +2360,7 @@ class VentanaPrincipal:
 
         self._crear_menu_gestion(
             "Gestión de pacientes",
-            (
-                "Administre los pacientes registrados "
-                "y consulte su historial."
-            ),
+            "",
             [
                 (
                     "Registrar paciente",
@@ -2409,7 +2392,7 @@ class VentanaPrincipal:
 
         self._crear_menu_gestion(
             "Gestión de profesionales",
-            "Administre profesionales de salud y consulte su actividad registrada.",
+            "",
             [
                 ("Registrar profesional", self.registrar_personal),
                 ("Ver profesionales", self.ver_personal),
@@ -2424,7 +2407,7 @@ class VentanaPrincipal:
         """Agrupa el alta, consulta y búsqueda de personal de enfermería."""
         self._crear_menu_gestion(
             "Gestión de enfermería",
-            "Registre personal de enfermería y consulte sus datos registrados y ventas de farmacia.",
+            "",
             [
                 ("Registrar personal", lambda: self.registrar_personal("enfermeria")),
                 ("Ver personal", lambda: self.ver_personal("enfermeria")),
@@ -2534,10 +2517,7 @@ class VentanaPrincipal:
 
         self._crear_menu_gestion(
             "Gestión de citas",
-            (
-                "Registre, consulte, reprograme o cancele citas. "
-                "Los estados avanzan junto con la agenda: En proceso durante el turno, No atendida al terminar sin opinión, o Atendida al finalizar el veredicto."
-            ),
+            "",
             [
                 (
                     "Registrar cita",
@@ -2573,10 +2553,7 @@ class VentanaPrincipal:
 
         self._crear_menu_gestion(
             "Atenciones médicas",
-            (
-                "Registre y siga cada atención: Pendiente, En proceso o Finalizada. "
-                "Los estados de la cita y de la atención se sincronizan con la agenda profesional y el turno de 30 minutos."
-            ),
+            "",
             [
                 (
                     "Registrar atención",

@@ -212,32 +212,10 @@ class PantallaPaciente:
             pady=(5, 5)
         )
 
-        subtitulo = tk.Label(
-            contenedor,
-            text=(
-                "Consulta tus servicios de salud "
-                "de manera segura."
-            ),
-            font=FUENTE_SUBTITULO,
-            fg=COLOR_GRIS_CLARO,
-            bg=COLOR_FONDO
-        )
-
-        subtitulo.pack(
-            pady=(0, 20)
-        )
-
         # La autenticación ocurre antes de abrir este portal; no se permite
         # cambiar a otro paciente desde una sesión ya iniciada.
         panel_identificacion = tk.Frame(contenedor, bg=COLOR_PANEL, padx=24, pady=16)
         panel_identificacion.pack(fill="x", padx=80, pady=10)
-        tk.Label(
-            panel_identificacion,
-            text="Sesión autenticada",
-            font=FUENTE_SECCION,
-            fg=COLOR_TEXTO,
-            bg=COLOR_PANEL,
-        ).pack(pady=(0, 5))
         tk.Label(
             panel_identificacion,
             text=f"{self.paciente_actual.nombre}  ·  Cuenta {self.sesion.usuario}",
@@ -246,21 +224,18 @@ class PantallaPaciente:
             bg=COLOR_PANEL,
         ).pack()
 
+        self.etiqueta_sesion = tk.Label(
+            contenedor,
+            text="",
+            font=("Arial", 10, "bold"),
+            fg=COLOR_GRIS_CLARO,
+            bg=COLOR_FONDO,
+        )
+        self.etiqueta_sesion.pack(pady=(8, 15))
+
         # =====================================================
         # ESTADO DE SESIÓN
         # =====================================================
-
-        self.etiqueta_sesion = tk.Label(
-            contenedor,
-            text=f"Acceso activo para {self.paciente_actual.nombre}.",
-            font=("Arial", 10, "bold"),
-            fg=COLOR_GRIS_CLARO,
-            bg=COLOR_FONDO
-        )
-
-        self.etiqueta_sesion.pack(
-            pady=(8, 15)
-        )
 
         # =====================================================
         # PANEL DE OPCIONES
@@ -280,7 +255,7 @@ class PantallaPaciente:
         tarjeta_citas = self.crear_tarjeta(
             panel_opciones,
             "Mis citas",
-            "Consulta tus citas médicas.",
+            "",
             self.mostrar_citas
         )
 
@@ -294,7 +269,7 @@ class PantallaPaciente:
         tarjeta_historial = self.crear_tarjeta(
             panel_opciones,
             "Mi historial clínico",
-            "Consulta tu historial médico.",
+            "",
             self.mostrar_historial
         )
 
@@ -308,7 +283,7 @@ class PantallaPaciente:
         tarjeta_datos = self.crear_tarjeta(
             panel_opciones,
             "Mis datos",
-            "Consulta tus datos personales.",
+            "",
             self.mostrar_datos
         )
 
@@ -322,7 +297,7 @@ class PantallaPaciente:
         tarjeta_reservar = self.crear_tarjeta(
             panel_opciones,
             "Solicitar una cita",
-            "Elige fecha y horario; el sistema asigna un profesional disponible.",
+            "",
             self.solicitar_cita
         )
 
@@ -532,22 +507,20 @@ class PantallaPaciente:
             pady=(16, 5)
         )
 
-        etiqueta_descripcion = tk.Label(
-            tarjeta,
-            text=descripcion,
-            font=("Arial", 10),
-            fg=COLOR_GRIS_CLARO,
-            bg=COLOR_PANEL,
-            wraplength=230
-        )
-
-        etiqueta_descripcion.pack(
-            pady=(0, 8)
-        )
+        if descripcion:
+            etiqueta_descripcion = tk.Label(
+                tarjeta,
+                text=descripcion,
+                font=("Arial", 10),
+                fg=COLOR_GRIS_CLARO,
+                bg=COLOR_PANEL,
+                wraplength=230
+            )
+            etiqueta_descripcion.pack(pady=(0, 8))
 
         boton = tk.Button(
             tarjeta,
-            text="Ingresar",
+            text="Abrir",
             font=FUENTE_BOTON,
             bg=COLOR_ROJO,
             fg=COLOR_BLANCO,
@@ -1303,16 +1276,3 @@ class PantallaPaciente:
                 side="left"
             )
 
-        tk.Label(
-            panel,
-            text=(
-                "El DNI se muestra protegido por "
-                "seguridad de los datos personales."
-            ),
-            font=("Arial", 9),
-            fg=COLOR_GRIS_CLARO,
-            bg=COLOR_PANEL,
-            justify="center"
-        ).pack(
-            pady=(20, 10)
-        )

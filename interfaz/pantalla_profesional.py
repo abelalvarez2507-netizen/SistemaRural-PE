@@ -152,7 +152,7 @@ class PantallaProfesional:
     def mostrar_acceso(self):
         contenedor = self._marco_base(
             "Acceso del profesional",
-            "Ingresa tu código profesional o tu DNI de 8 dígitos.",
+            "Ingresa tu código profesional o DNI.",
         )
         tarjeta = tk.Frame(contenedor, bg=COLOR_PANEL, padx=28, pady=24)
         tarjeta.pack(pady=24)
@@ -346,7 +346,7 @@ class PantallaProfesional:
             ):
                 self._boton(
                     acciones,
-                    "Registrar / editar opinión médica",
+                    "Registrar opinión",
                     lambda item=cita: self.editar_atencion(item),
                 ).pack(side="left", padx=(0, 6))
                 if cita.estado in {"Pendiente", "Reprogramada"}:
@@ -387,13 +387,6 @@ class PantallaProfesional:
                     justify="left",
                 ).pack(anchor="w", pady=(10, 0))
 
-        tk.Label(
-            contenedor,
-            text="Los turnos duran 30 minutos. Al iniciar pasan a En proceso; una derivación permanece abierta hasta el veredicto final.",
-            font=("Arial", 9),
-            fg=COLOR_GRIS,
-            bg=COLOR_FONDO,
-        ).pack(anchor="w", pady=(8, 0))
         if self._temporizador:
             try:
                 self.ventana.after_cancel(self._temporizador)
@@ -498,7 +491,11 @@ class PantallaProfesional:
                 wraplength=1050,
                 justify="left",
             ).pack(anchor="w", pady=(2, 4))
-        if atencion and atencion.diagnostico != atencion.informe_derivacion:
+        if (
+            atencion
+            and not transferida
+            and atencion.diagnostico != atencion.informe_derivacion
+        ):
             tk.Label(
                 tarjeta,
                 text=f"Veredicto / diagnóstico: {atencion.diagnostico}",
@@ -526,7 +523,7 @@ class PantallaProfesional:
             elif cita.profesional.codigo_profesional == self.profesional_actual.codigo_profesional:
                 self._boton(
                     acciones,
-                    "Registrar / editar opinión médica",
+                    "Registrar opinión",
                     lambda item=cita: self.editar_atencion(item),
                 ).pack(side="left", padx=(0, 7))
                 if cita.estado in {"Pendiente", "Reprogramada"}:
@@ -577,7 +574,7 @@ class PantallaProfesional:
         self.sistema.actualizar_citas_vencidas()
         contenido = self._marco_base(
             "Historial y derivaciones",
-            "Atenciones finalizadas y pacientes remitidos a otro profesional.",
+            "",
             volver=self.mostrar_agenda,
         )
         citas = []
@@ -713,21 +710,11 @@ class PantallaProfesional:
             panel_derivacion.pack(fill="x", padx=22, pady=(4, 10))
             tk.Label(
                 panel_derivacion,
-                text="Derivar al profesional adecuado (obligatorio)",
+                text="Derivar a",
                 font=("Arial", 16, "bold"),
                 fg=COLOR_TEXTO,
                 bg=COLOR_PANEL,
             ).pack(anchor="w")
-            tk.Label(
-                panel_derivacion,
-                text="Selecciona al especialista que continuará la atención. La derivación quedará en el historial del paciente.",
-                font=("Arial", 12),
-                fg=COLOR_GRIS,
-                bg=COLOR_PANEL,
-                wraplength=760,
-                justify="left",
-            ).pack(anchor="w", pady=(2, 8))
-
             especialistas = [
                 profesional
                 for profesional in self.sistema.obtener_personal()
@@ -773,7 +760,7 @@ class PantallaProfesional:
             if not especialistas:
                 tk.Label(
                     panel_derivacion,
-                    text="No hay especialistas registrados. Registra uno antes de guardar esta atención.",
+                    text="No hay profesionales disponibles para derivación.",
                     font=("Arial", 9),
                     fg=COLOR_ROJO,
                     bg=COLOR_PANEL,
@@ -788,15 +775,6 @@ class PantallaProfesional:
             fg=COLOR_TEXTO,
             bg=COLOR_PANEL,
         ).pack(anchor="w")
-        tk.Label(
-            panel_recetas,
-            text="Indica el medicamento, la duración en días y cada cuánto debe tomarse.",
-            font=FUENTE_BOTON,
-            fg=COLOR_GRIS,
-            bg=COLOR_PANEL,
-            wraplength=760,
-            justify="left",
-        ).pack(anchor="w", pady=(2, 8))
         encabezados = tk.Frame(panel_recetas, bg=COLOR_PANEL)
         encabezados.pack(fill="x")
         for columna, (titulo, peso) in enumerate((("Medicamento", 3), ("Días", 1), ("Cada cuánto", 2))):
