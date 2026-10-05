@@ -145,7 +145,7 @@ class PantallaInicio:
         # al fondo y el texto/botones van encima.
         # =====================================================
 
-        self._fondo_original = self._cargar_imagen("fondo_inicio.png")
+        self._fondo_original = self._cargar_imagen("fondo_rural.jpg")
         self._icono_original = self._cargar_imagen("icono_inicio.png")
         self._foto_icono = None
         self._foto_fondo = None
