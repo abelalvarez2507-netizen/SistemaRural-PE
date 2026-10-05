@@ -1,7 +1,15 @@
 """Pantalla de acceso y alta de cuentas dentro de la ventana principal."""
 
+import math
+import os
 import tkinter as tk
 from tkinter import messagebox
+
+try:
+    from PIL import Image, ImageTk
+except ImportError:  # pragma: no cover
+    Image = None
+    ImageTk = None
 
 from servicios.autenticacion import ServicioAutenticacion
 from servicios.validaciones import (
@@ -24,6 +32,11 @@ from interfaz.estilos import (
 
 
 FUENTE_TITULO_MODAL = ("Arial", 22, "bold")
+RUTA_FONDO = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "imagenes",
+    "fondo_rural.jpg",
+)
 
 TERMINOS_CONDICIONES = """TÉRMINOS Y CONDICIONES – RURAL SALUDPRO
 
@@ -148,14 +161,20 @@ class ModalVerificador(tk.Frame):
         nombre, descripcion = self.ROLES[self.rol]
         self._vista = VistaDesplazable(self, COLOR_FONDO)
         self._vista.pack(fill="both", expand=True)
-        exterior = tk.Frame(
-            self._vista.contenido, bg=COLOR_FONDO, padx=24, pady=22
-        )
-        exterior.pack(fill="both", expand=True)
-        self.exterior = exterior
+        self._canvas = self._vista.canvas
+        # El contenido desplazable original llenaba el fondo con un color
+        # sólido. Ahora el Canvas sirve de escenario para la ilustración.
+        self._canvas.delete(self._vista._ventana_canvas)
+        self._vista.contenido.destroy()
+        self._vista._ventana_canvas = None
+        self._fondo_original = self._cargar_fondo()
+        self._foto_fondo = None
+        self._tamano_fondo = None
+        self._id_fondo = self._canvas.create_image(0, 0, anchor="nw")
+        self._canvas.bind("<Configure>", self._programar_ajuste, add="+")
 
         tarjeta = tk.Frame(
-            exterior,
+            self._canvas,
             bg=COLOR_BLANCO,
             width=540,
             padx=30,
@@ -163,7 +182,12 @@ class ModalVerificador(tk.Frame):
             highlightthickness=1,
             highlightbackground="#DCE8E1",
         )
-        tarjeta.pack(anchor="center", expand=True, pady=18)
+        self.exterior = tarjeta
+        self._panel_visible = tarjeta
+        self._id_panel = self._canvas.create_window(
+            0, 0, anchor="n", window=tarjeta, width=540
+        )
+        tarjeta.bind("<Configure>", self._programar_ajuste, add="+")
 
         tk.Button(
             tarjeta,
@@ -220,6 +244,66 @@ class ModalVerificador(tk.Frame):
         )
         self.error.pack(pady=(8, 0))
         self._mostrar_modo(self.modo)
+        self._programar_ajuste()
+
+    def _cargar_fondo(self):
+        if Image is None:
+            return None
+        try:
+            imagen = Image.open(RUTA_FONDO)
+            imagen.load()
+            return imagen.convert("RGB")
+        except (OSError, ValueError):
+            return None
+
+    def _programar_ajuste(self, _evento=None):
+        try:
+            if getattr(self, "_after_ajuste", None) is not None:
+                self._canvas.after_cancel(self._after_ajuste)
+            self._after_ajuste = self._canvas.after_idle(self._ajustar_fondo)
+        except tk.TclError:
+            pass
+
+    def _ajustar_fondo(self):
+        self._after_ajuste = None
+        try:
+            ancho = self._canvas.winfo_width()
+            alto = self._canvas.winfo_height()
+            panel = self._panel_visible
+            if ancho < 50 or alto < 50 or not panel.winfo_exists():
+                return
+            ancho_panel = max(1, min(600, ancho - 48))
+            self._canvas.itemconfigure(self._id_panel, width=ancho_panel)
+            panel.update_idletasks()
+            alto_panel = panel.winfo_reqheight()
+            alto_contenido = max(alto, alto_panel + 44)
+            y = max(22, (alto - alto_panel) // 2)
+            self._canvas.coords(self._id_panel, ancho // 2, y)
+            self._canvas.configure(scrollregion=(0, 0, ancho, alto_contenido))
+            self._pintar_fondo(ancho, alto_contenido)
+        except tk.TclError:
+            pass
+
+    def _pintar_fondo(self, ancho, alto):
+        if self._fondo_original is None or ImageTk is None:
+            return
+        if (ancho, alto) == self._tamano_fondo:
+            return
+        original = self._fondo_original
+        escala = max(ancho / original.width, alto / original.height)
+        nuevo_ancho = math.ceil(original.width * escala)
+        nuevo_alto = math.ceil(original.height * escala)
+        imagen = original.resize((nuevo_ancho, nuevo_alto), Image.LANCZOS)
+        izquierda = (nuevo_ancho - ancho) // 2
+        arriba = (nuevo_alto - alto) // 2
+        imagen = imagen.crop((izquierda, arriba, izquierda + ancho, arriba + alto))
+        try:
+            self._foto_fondo = ImageTk.PhotoImage(imagen)
+            self._canvas.itemconfigure(self._id_fondo, image=self._foto_fondo)
+            self._canvas.tag_lower(self._id_fondo)
+            self._tamano_fondo = (ancho, alto)
+        except tk.TclError:
+            pass
 
     def _agregar_consentimiento(self):
         self.acepta_terminos = tk.BooleanVar(master=self, value=False)
@@ -250,17 +334,17 @@ class ModalVerificador(tk.Frame):
     def _mostrar_terminos(self):
         if self._pagina_terminos is not None:
             return
-        self.exterior.pack_forget()
-        pagina = tk.Frame(self._vista.contenido, bg=COLOR_FONDO, padx=24, pady=22)
-        pagina.pack(fill="both", expand=True)
+        self._canvas.delete(self._id_panel)
+        pagina = tk.Frame(self._canvas, bg=COLOR_BLANCO, padx=22, pady=18)
         self._pagina_terminos = pagina
+        self._panel_visible = pagina
+        self._id_panel = self._canvas.create_window(
+            0, 0, anchor="n", window=pagina, width=600
+        )
+        pagina.bind("<Configure>", self._programar_ajuste, add="+")
         tarjeta = tk.Frame(
             pagina,
             bg=COLOR_BLANCO,
-            padx=22,
-            pady=18,
-            highlightthickness=1,
-            highlightbackground="#DCE8E1",
         )
         tarjeta.pack(fill="both", expand=True)
         tk.Button(
@@ -305,7 +389,11 @@ class ModalVerificador(tk.Frame):
         if self._pagina_terminos is not None:
             self._pagina_terminos.destroy()
             self._pagina_terminos = None
-        self.exterior.pack(fill="both", expand=True)
+        self._panel_visible = self.exterior
+        self._id_panel = self._canvas.create_window(
+            0, 0, anchor="n", window=self.exterior, width=600
+        )
+        self._programar_ajuste()
         self._centrar()
 
     def _requiere_aceptacion(self):
