@@ -1,5 +1,6 @@
 import os
 import tempfile
+from datetime import date, timedelta
 
 import pytest
 
@@ -31,6 +32,11 @@ def crear_profesional(codigo="PS001", dni="87654321"):
         40,
         "Medicina General"
     )
+
+
+def fecha_futura(dias=30):
+    """Devuelve una fecha futura para pruebas de citas."""
+    return (date.today() + timedelta(days=dias)).strftime("%d/%m/%Y")
 
 
 def test_registro_y_busqueda_de_paciente_por_codigo():
@@ -145,7 +151,7 @@ def test_registro_de_cita_con_entidades_existentes():
             "C001",
             paciente,
             profesional,
-            "15/09/2026",
+            fecha_futura(),
             "Consulta general"
         )
 
@@ -190,14 +196,14 @@ def test_filtra_citas_pendientes():
             "C001",
             paciente,
             profesional,
-            "15/09/2026",
+            fecha_futura(30),
             "Consulta general"
         )
         cita_2 = FabricaEntidades.crear_cita(
             "C002",
             paciente,
             profesional,
-            "16/09/2026",
+            fecha_futura(31),
             "Control",
             "Atendida"
         )
@@ -224,7 +230,7 @@ def test_actualizar_estado_de_cita():
             "C001",
             paciente,
             profesional,
-            "15/09/2026",
+            fecha_futura(),
             "Consulta general"
         )
         sistema.registrar_cita(cita)
@@ -370,7 +376,7 @@ def test_no_permite_atencion_duplicada_para_la_misma_cita():
             "C001",
             paciente,
             profesional,
-            "20/09/2026",
+            fecha_futura(),
             "Control"
         )
         sistema.registrar_cita(cita)
@@ -512,9 +518,9 @@ def test_rechaza_estado_de_cita_invalido():
             "C001",
             paciente,
             profesional,
-            "20/09/2026",
+            fecha_futura(),
             "Control",
-            "Cancelada"
+            "EstadoInventado"
         )
 
 
@@ -580,7 +586,7 @@ def test_cambio_de_estado_de_cita_se_persiste():
                 "C001",
                 paciente,
                 profesional,
-                "20/09/2026",
+                fecha_futura(),
                 "Control"
             )
         )
